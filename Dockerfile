@@ -1,3 +1,5 @@
+# 참고: 이 Dockerfile은 LineVul 학습과 훈련을 위해 최적화 되어있습니다. 다른 모델 학습을 위해 사용하시려면 수정하십시오.
+
 # 1. Base Image: NVIDIA CUDA 11.8 with cuDNN 8 on Ubuntu 20.04
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
@@ -25,7 +27,7 @@ RUN pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2 -
 # 7. Set working directory
 WORKDIR /app
 
-# 8. Create a requirements file for the Docker environment.
+# 8. Create a requirements file for the linevul Docker environment.
 # 아래의 세 패키지는 충돌을 피하기 위해 다운그레이드 됨
 # matplotlib==3.5.3
 # contourpy==1.0.7

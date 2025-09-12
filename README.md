@@ -17,7 +17,8 @@
 
 1.  **Docker 이미지 빌드**
 
-    프로젝트 루트 디렉터리에서 다음 명령어를 실행하여 Docker 이미지를 빌드합니다. 이 과정은 의존성 패키지와 `big-vul` 데이터셋을 모두 이미지에 포함시키며, 최초 빌드 시 시간이 다소 소요될 수 있습니다.
+    프로젝트 루트 디렉터리에서 다음 명령어를 실행하여 Docker 이미지를 빌드합니다. 
+    이 과정은 의존성 패키지와 `big-vul` 데이터셋을 모두 이미지에 포함시키며, 최초 빌드 시 시간이 다소 소요될 수 있습니다.
 
     ```sh
     docker build --no-cache -t linevul-env .
@@ -44,6 +45,7 @@
     - `2>&1 | tee train.log`: 학습 과정의 모든 출력(표준 출력 및 오류)을 터미널과 `LineVul/linevul/train.log` 파일 양쪽에 기록합니다.
 
     > **참고:** 아래 명령어의 `--epochs` 값은 논문과 동일한 10으로 설정되어 있습니다. 필요에 맞게 조절하십시오.
+    > **참고:** 도커 빌드 도중 gdown 차단으로 컨테이너에 데이터셋과 모델이 없을수 있습니다. 확인후 학습을 수행하십시오. 
 
     **host os Linux**
     ```sh
@@ -79,7 +81,7 @@
     --eval_data_file=../data/big-vul_dataset/val.csv \
     --test_data_file=../data/big-vul_dataset/test.csv \
     --block_size 512 \
-    --eval_batch_size 512
+    --eval_batch_size 512 2>&1 | tee test.log
     ```
 
     **host os Windows**
@@ -109,22 +111,23 @@
     --model_name=12heads_linevul_model.bin `
     --output_dir=./saved_models `
     --model_type=roberta `
-    --tokenizer_name=microsoft/codebert-base \
-    --model_name_or_path=microsoft/codebert-base \
-    --do_test \
-    --train_data_file=../data/big-vul_dataset/train.csv \
-    --eval_data_file=../data/big-vul_dataset/val.csv \
-    --test_data_file=../data/big-vul_dataset/test.csv \
-    --block_size 512 \
-    --eval_batch_size 512
+    --tokenizer_name=microsoft/codebert-base `
+    --model_name_or_path=microsoft/codebert-base `
+    --do_test `
+    --train_data_file=../data/big-vul_dataset/train.csv `
+    --eval_data_file=../data/big-vul_dataset/val.csv `
+    --test_data_file=../data/big-vul_dataset/test.csv `
+    --block_size 512 `
+    --eval_batch_size 512 *>&1 | Tee-Object -FilePath test.log
     ```
 
-4.  **학습 과정 모니터링**
+4.  **학습/테스트 과정 모니터링**
 
-    호스트 머신에서 다음 명령어를 실행하여 `train.log` 파일을 실시간으로 확인하며 학습 진행 상황을 모니터링할 수 있습니다.
+    호스트 머신에서 다음 명령어를 실행하여 `train.log`, `test.log` 파일들을 실시간으로 확인하며 진행 상황을 모니터링할 수 있습니다.
 
     ```sh
     tail -f ./LineVul/linevul/train.log
+    tail -f ./LineVul/linevul/test.log
     ```
 
 

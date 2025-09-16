@@ -3,7 +3,7 @@ import os,sys
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
-from pytorch_lightning import seed_everything
+from pytorch_lightning import seed_everything, Trainer
 import torch
 from src.models.vd import DeepWuKong
 from src.datas.datamodules import XFGDataModule
@@ -55,4 +55,4 @@ def configure_arg_parser() -> ArgumentParser:
 if __name__ == '__main__':
     __arg_parser = configure_arg_parser()
     __args = __arg_parser.parse_args()
-    test(__args.checkpoint, __args.root_folder_path,__args.split_folder_name, __args.batch_size, __args.sample_percentage,__args.sub_folder)
+    test(__args.checkpoint, __args.root_folder_path,__args.split_folder_name, __args.batch_size)#, __args.sample_percentage,__args.sub_folder)

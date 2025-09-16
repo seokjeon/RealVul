@@ -2,12 +2,12 @@ seed: 7
 num_workers: 8
 log_offline: false
 
-joern_path: "<joern_path>"
+joern_path: "<joern_path>" # useless
 split_token: false
 
 
-big_vul_csv_path: "/data/linevul_data.csv"
-project_name: "<project_name>"
+big_vul_csv_path: "/data/linevul_data.csv" # useless
+project_name: "<project_name>" # for deepwukong_pipline.sh
 
 local_dir: "true"
 local_dir_xfg_path: "XFG"
@@ -15,11 +15,11 @@ local_dir_source_code_path: "source_code"
 train_test_split_csv: "true"
 local_dir_csv_path: "csv"
 
-split_folder_name: "<folder_name>"
-root_folder_path: "<root_folder_path>"
-sensiAPI_path: "<sensiAPI_path>"
-ts_logger_path: "<ts_logger_path>"
-csv_data_path: "<csv_data_path>"
+split_folder_name: "<folder_name>" # current dataset(?) name
+root_folder_path: "/data/dataset"
+sensiAPI_path: "sensiAPI.txt"
+ts_logger_path: "ts_logger" # for debugging
+csv_data_path: "/data/dataset/all_csv.tar.gz" # for data generation in realvul *_dataset.csv
 
 
 save_every_epoch: 1
@@ -28,7 +28,7 @@ log_every_epoch: 10
 progress_bar_refresh_rate: 1
 
 dataset:
-  name: "<project_name>"
+  name: "<project_name>" # useless
   token:
     max_parts: 100
     is_wrapped: false

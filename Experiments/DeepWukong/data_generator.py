@@ -323,7 +323,7 @@ def process_parallel(testcase:str, doneIDs: Set, codeIDtoPath: Dict, root: str,
 
     """
     import logging
-    os.environ["SLURM_TMPDIR"] = "/project"
+    os.environ["SLURM_TMPDIR"] = "/code/models/DeepWukong/data/realvul"
     try:
         if testcase in doneIDs:
             return testcase
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     
     config = cast(DictConfig, OmegaConf.load(config_path))
     root = config.root_folder_path
-    os.environ["SLURM_TMPDIR"] = "/project/"
+    os.environ["SLURM_TMPDIR"] = "/code/models/DeepWukong/data/realvul"
     
     csv_path=config.csv_data_path
     
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     vul_data_csv['unique_file_name'] = vul_data_csv['unique_id'].astype(str) + ".c"
     vul_data=pd.Series(vul_data_csv.vulnerable_line_numbers.values,index=vul_data_csv.unique_file_name).fillna('').to_dict()
     codeIDtoPath = getCodeIDtoPathDict(vul_data, source_root_path)
-    # print(codeIDtoPath)
+    print(codeIDtoPath)
 
     if not exists(out_root_path):
         os.makedirs(out_root_path)
@@ -376,5 +376,4 @@ if __name__ == "__main__":
             result_ids.append(process_parallel.remote(i,doneIDs=[],
                                              codeIDtoPath=codeIDtoPath,
                                              root=root, source_root_path=source_root_path,out_root_path=out_root_path, config=config))
-    results = ray.get(result_ids) 
-        
+    results = ray.get(result_ids)

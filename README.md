@@ -1,5 +1,10 @@
 # RealVul
 
+## 0. RealVul 준비
+0. git clone --recursive https://github.com/seokjeon/RealVul
+1. [RealVul 공식 repository](https://zenodo.org/records/12707476)에서 `Replication Package.zip`를 다운로드 합니다.
+2. 압축 파일 내 Dataset 폴더를 RealVul 폴더로 옮깁니다.
+
 ## 1. LineVul 재현 방법
 
 **요구사항:**
@@ -131,3 +136,28 @@
     ```
 
 
+## DeepWukong 재현
+1. mkdir Experiments/DeepWukong/data
+2. 도커 이미지를 생성한다.
+    - GPU 사용 시: `docker-compose build deepwukong`
+    - CPU 사용 시: `docker-compose build deepwukong_without_gpu`
+
+### pretrained_model로 deepwukong 데이터셋(SARD-CWE119) 평가
+0. deepwukong의 실험을 재현하기 위해 [data](https://github.com/jumormt/DeepWukong?tab=readme-ov-file#setup)와 [pretrained_model](https://github.com/jumormt/DeepWukong?tab=readme-ov-file#one-step-evaluation)를 다운로드 받아 압축 해제 후 Experiments/DeepWukong/data로 옮긴다. `7z x Data.7z -o/code/models/DeepWukong/data/`
+1. 도커 컨테이너를 실행한다.
+    - GPU 사용 시: `docker-compose up deepwukong -d`
+    - CPU 사용 시: `docker-compose up deepwukong_without_gpu -d`
+2. Experiments/DeepWukong/config/config.yaml에서 `split_folder_name`을 `CWE119`로 변경
+3. `PYTORCH_JIT=0 SLURM_TMPDIR=. python evaluate.py ./data/DeepWukong --root_folder_path ./data --split_folder_name CWE119`
+
+### pretrained_model로 realvul 평가
+0. 도커 컨테이너를 실행한다.
+    - GPU 사용 시: `docker-compose up deepwukong -d`
+    - CPU 사용 시: `docker-compose up deepwukong_without_gpu -d`
+0. 
+1. Experiments/DeepWukong/config/config.yaml에서 `csv_data_path`을 `/data/dataset/all_csv.tar.gz`로 변경
+2. Experiments/DeepWukong/deepwukong_pipeline.sh의 `project_name`을 `all`로 변경, `SLURM_TMPDIR`을 `/code/models/DeepWukong/data/realvul`으로 변경
+3. mkdir -p /code/models/DeepWukong/data/
+
+### 그 외 다른 소프트웨어 테스트 시
+1. Experiments/DeepWukong/deepwukong_pipeline.sh의 `tar -xf "/data/dataset/${project_name}_source_code.tar.xz" -C $SLURM_TMPDIR`를 `tar -xf "/data/dataset/${project_name}_source_code.tar.gz" -C $SLURM_TMPDIR`로 변경해야 함. all_source_code 만 tar.xz고 나머지는 gz임.

@@ -39,7 +39,7 @@ keywords = frozenset({
     'typedef', 'typeid', 'typename', 'union', 'unsigned', 'using', 'virtual',
     'void', 'volatile', 'wchar_t', 'while', 'xor', 'xor_eq', 'NULL'
 })
-with open(r"project/sensiAPI.txt","r") as f:
+with open(r"/code/models/DeepWukong/sensiAPI.txt","r") as f:
     a = f.read().split(',')
 keywords = keywords.union(a)
 # holds known non-user-defined functions; immutable set

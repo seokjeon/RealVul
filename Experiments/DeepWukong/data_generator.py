@@ -8,6 +8,8 @@ import sys
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
+os.environ['RAY_TMPDIR'] = '/data/tmp'
+os.environ['TMPDIR'] = '/data/tmp'
 from tqdm import tqdm
 from typing import cast
 import dataclasses
@@ -18,8 +20,13 @@ import traceback
 import pandas as pd
 import ray
 import logging
+from ray.exceptions import RayTaskError, WorkerCrashedError
 
-ray.init(_plasma_directory="/tmp")
+ray.init(
+    _temp_dir="/data/tmp",
+    dashboard_host="0.0.0.0",  # 모든 IP에서 접근 가능
+    dashboard_port=8265
+)
 USE_CPU = cpu_count()
 xfg_ct=0
 
@@ -323,7 +330,7 @@ def process_parallel(testcase:str, doneIDs: Set, codeIDtoPath: Dict, root: str,
 
     """
     import logging
-    os.environ["SLURM_TMPDIR"] = "/code/models/DeepWukong/data/realvul"
+    os.environ["SLURM_TMPDIR"] = "/data/RealVul/Experiments/DeepWukong"
     try:
         if testcase in doneIDs:
             return testcase
@@ -337,7 +344,7 @@ def process_parallel(testcase:str, doneIDs: Set, codeIDtoPath: Dict, root: str,
                                       source_path)
         # print(PDG, key_line_map)
         res = build_XFG(PDG, key_line_map, vul_lines)
-        #print("res", res)
+        # print("res", res)
         if res:
             dump_XFG(res, out_root_path,testcase)
         return testcase
@@ -354,26 +361,94 @@ if __name__ == "__main__":
     
     config = cast(DictConfig, OmegaConf.load(config_path))
     root = config.root_folder_path
-    os.environ["SLURM_TMPDIR"] = "/code/models/DeepWukong/data/realvul"
+    os.environ["SLURM_TMPDIR"] = "/data/RealVul/Experiments/DeepWukong/data/all"
     
     csv_path=config.csv_data_path
     
     source_root_path = join(os.environ["SLURM_TMPDIR"],config.local_dir_source_code_path)
     out_root_path=join(os.environ["SLURM_TMPDIR"],config.local_dir_xfg_path)
     vul_data_csv=pd.read_csv(csv_path)
-    vul_data_csv["vulnerable_line_numbers"] = vul_data_csv["flaw_line_index"]
+    # vul_data_csv["vulnerable_line_numbers"] = vul_data_csv["flaw_line_index"]
     vul_data_csv['unique_file_name'] = vul_data_csv['unique_id'].astype(str) + ".c"
     vul_data=pd.Series(vul_data_csv.vulnerable_line_numbers.values,index=vul_data_csv.unique_file_name).fillna('').to_dict()
     codeIDtoPath = getCodeIDtoPathDict(vul_data, source_root_path)
-    print(codeIDtoPath)
+    # print(codeIDtoPath)
 
     if not exists(out_root_path):
         os.makedirs(out_root_path)
 
-    result_ids = []
-    for i in codeIDtoPath:
-        if isinstance(i, str):
-            result_ids.append(process_parallel.remote(i,doneIDs=[],
-                                             codeIDtoPath=codeIDtoPath,
-                                             root=root, source_root_path=source_root_path,out_root_path=out_root_path, config=config))
-    results = ray.get(result_ids)
+
+    # 작업 목록 준비
+    task_list = [i for i in codeIDtoPath if isinstance(i, str)]
+    total_tasks = len(task_list)
+    
+    if total_tasks == 0:
+        print("No tasks to process.")
+        results = []
+    else:
+        print(f"Processing {total_tasks} tasks (CPU cores: {USE_CPU})")
+        
+        # Initial task submission (2x CPU cores)
+        initial_batch_size = min(USE_CPU * 2, total_tasks)
+        pending, results, failures = [], [], []
+        
+        # Progress bar setup
+        pbar = tqdm(total=total_tasks, desc="Processing", unit="files", 
+                   bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]')
+        
+        # Initial batch submission
+        for i in range(initial_batch_size):
+            pending.append(process_parallel.remote(task_list[i], doneIDs=[], 
+                                                 codeIDtoPath=codeIDtoPath,
+                                                 root=root, source_root_path=source_root_path,
+                                                 out_root_path=out_root_path, config=config))
+        
+        # Index for remaining tasks
+        next_task_idx = initial_batch_size
+        
+        # Main processing loop
+        while pending:
+            # Collect completed tasks (multiple at once)
+            done, pending = ray.wait(pending, 
+                                   num_returns=min(USE_CPU, len(pending)), 
+                                   timeout=None)
+            
+            # Process completed tasks
+            for obj in done:
+                try:
+                    result = ray.get(obj)
+                    results.append(result)
+                except (RayTaskError, WorkerCrashedError) as e:
+                    logging.error(f"Task failed: {e}")
+                    failures.append((obj, str(e)))
+                    pbar.set_postfix_str(f"Failed: {len(failures)}")
+            
+            # Update progress
+            pbar.update(len(done))
+            
+            # Submit new tasks (as many as completed)
+            for _ in range(len(done)):
+                if next_task_idx < total_tasks:
+                    pending.append(process_parallel.remote(task_list[next_task_idx], doneIDs=[], 
+                                                         codeIDtoPath=codeIDtoPath,
+                                                         root=root, source_root_path=source_root_path,
+                                                         out_root_path=out_root_path, config=config))
+                    next_task_idx += 1
+        
+        pbar.close()
+        
+        # Results summary
+        print(f"\n✅ Processing completed!")
+        print(f"   Success: {len(results)} files")
+        if failures:
+            print(f"   Failed: {len(failures)} files")
+            print(f"   Success rate: {len(results)/(len(results)+len(failures))*100:.1f}%")
+
+    # 원본
+    # result_ids = []
+    # for i in codeIDtoPath:
+    #     if isinstance(i, str):
+    #         result_ids.append(process_parallel.remote(i,doneIDs=[],
+    #                                          codeIDtoPath=codeIDtoPath,
+    #                                          root=root, source_root_path=source_root_path,out_root_path=out_root_path, config=config))
+    # results = ray.get(result_ids)

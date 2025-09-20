@@ -1,5 +1,5 @@
 seed: 7
-num_workers: 8
+num_workers: -1
 log_offline: false
 
 joern_path: "<joern_path>" # useless
@@ -7,19 +7,19 @@ split_token: false
 
 
 big_vul_csv_path: "/data/linevul_data.csv" # useless
-project_name: "<project_name>" # for deepwukong_pipline.sh
+project_name: "all" # for deepwukong_pipline.sh
 
 local_dir: "true"
-local_dir_xfg_path: "XFG"
-local_dir_source_code_path: "source_code"
+local_dir_xfg_path: "data/${project_name}/XFG"
+local_dir_source_code_path: "data/${project_name}/source_code"
 train_test_split_csv: "true"
-local_dir_csv_path: "csv"
+local_dir_csv_path: "data/${project_name}/csv"
 
-split_folder_name: "<folder_name>" # current dataset(?) name
-root_folder_path: "/data/dataset"
+split_folder_name: "${project_name}" # current dataset(?) name
+root_folder_path: "data"
 sensiAPI_path: "sensiAPI.txt"
 ts_logger_path: "ts_logger" # for debugging
-csv_data_path: "/data/dataset/all_csv.tar.gz" # for data generation in realvul *_dataset.csv
+csv_data_path: "/data/RealVul/Dataset/Real_Vul_data.csv" # for data generation in realvul *_dataset.csv
 
 
 save_every_epoch: 1
@@ -69,7 +69,7 @@ hyper_parameters:
   test_batch_size: 64
   reload_dataloader: true
   clip_norm: 5
-  val_every_step: 1.0
+  val_every_step: 1 # 1.0
   log_every_n_steps: 50
   progress_bar_refresh_rate: 1
   resume_from_checkpoint: null

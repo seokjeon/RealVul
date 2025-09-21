@@ -42,20 +42,20 @@ def removeComments(text):
            //.*?$           ##  Start of // .... comment
          |                  ##
            /\*              ##  Start of /* ... */ comment
-           [^*]*\*+         ##  Non-* followed by 1-or-more *\'s
+           [^*]*\*+         ##  Non-* followed by 1-or-more *'s
            (                ##
              [^/*][^*]*\*+  ##
-           )*               ##  0-or-more things which don\'t start with /
-                            ##    but do end with *'
+           )*               ##  0-or-more things which don't start with /
+                            ##    but do end with '*'
            /                ##  End of /* ... */ comment
-         |                  ##  -OR-  various things which aren\'t comments:
+         |                  ##  -OR-  various things which aren't comments:
            (                ##
                             ##  ------ " ... " STRING ------
              "              ##  Start of " ... " string
              (              ##
                \\.          ##  Escaped char
              |              ##  -OR-
-               [^"\\]       ##  Non \" characters
+               [^"\\]       ##  Non "\ characters
              )*             ##
              "              ##  End of " ... " string
            |                ##  -OR-
@@ -65,14 +65,14 @@ def removeComments(text):
              (              ##
                \\.          ##  Escaped char
              |              ##  -OR-
-               [^\'\\]       ##  Non \\' characters
+               [^'\\]       ##  Non '\ characters
              )*             ##
              '              ##  End of ' ... ' string
            |                ##  -OR-
                             ##
                             ##  ------ ANYTHING ELSE -------
              .              ##  Anything other char
-             [^/"\'\\]*      ##  Chars which doesn\'t start a comment, string
+             [^/"'\\]*      ##  Chars which doesn't start a comment, string
            )                ##    or escape
     """
     regex = re.compile(pattern, re.VERBOSE|re.MULTILINE|re.DOTALL)
@@ -81,7 +81,7 @@ def removeComments(text):
     return noncomments
 
     
-class Dataset(torch.utils.data.Dataset):
+class Dataset(torch.utils.data.Dataset):    
     def __init__(self, encodings, labels=None):          
         self.encodings = encodings        
         self.labels = labels
@@ -123,7 +123,6 @@ def create_token_chunks_vulnerable_samples(code_statements,all_special_ids,vulne
             labels.append(0)
     return samples,labels
 
-''' fix: 토크나이저 길이제한 적용을 위한 수정
 @ray.remote 
 def read_file_label(sample,tokenizer):
     label=1 if sample["vulnerable_line_numbers"] else 0
@@ -145,45 +144,7 @@ def read_file_label(sample,tokenizer):
             labels.append(label)
     
     return inputs,labels
-'''
-
-@ray.remote 
-def read_file_label(sample,tokenizer):
-    label=1 if sample["vulnerable_line_numbers"] else 0
-    all_special_ids=tokenizer.all_special_ids
-    source_value = sample["processed_func"]
-    if isinstance(source_value, float):  # fix: Safety for unexpected NaN
-        source_value = ""
-    source_code=source_value.split("\n")
-    inputs,labels=[],[]
-    if label==1:
-        encoded = tokenizer(
-            source_code,
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors=None
-        )["input_ids"]
-        samples,mixed_labels=create_token_chunks_vulnerable_samples(
-            encoded, all_special_ids, sample["vulnerable_line_numbers"].split(",")
-        )
-        inputs.extend(samples)
-        labels.extend(mixed_labels)
-    else:
-        input_id = tokenizer(
-            removeComments("".join(source_code)),
-            truncation=True, # fix: token length fix
-            max_length=512,
-            return_tensors=None
-        )["input_ids"]
-        modified_input_ids=[]
-        for i in range(len(input_id)):
-            if input_id[i] not in all_special_ids:
-                modified_input_ids.append(input_id[i])
-        for i in range(0,len(modified_input_ids),510):
-            inputs.append(tokenizer.decode(modified_input_ids[i:i+510]))
-            labels.append(label)
-    return inputs,labels
+    
     
     
 def prepare_dataset(samples,tokenizer):
@@ -199,13 +160,10 @@ def prepare_dataset(samples,tokenizer):
         return source_codes,labels
 
 
+
 def train_filter(source_codes,labels):
     final_samples=defaultdict(dict)
     modified_source_codes,modified_labels=[],[]
-    
-    # fix: UnboundLocalError 방지를 위한 초기화 추가
-    collisions = 0
-    duplicates = 0
     for i,_ in tqdm(enumerate(labels),total=len(labels)):
             hash1=getMD5("".join(source_codes[i].split()))
             if hash1 not in final_samples:
@@ -215,9 +173,6 @@ def train_filter(source_codes,labels):
                 old_label=final_samples[hash1]["label"]
                 if (old_label!=-1 and old_label!=labels[i]) or (old_label==-1):
                     final_samples[hash1]["label"]=-1
-                    collisions += 1
-                else:
-                    duplicates += 1
 
     
     for i in final_samples:
@@ -230,10 +185,6 @@ def train_filter(source_codes,labels):
 def test_filter(source_codes,labels):
     final_samples=defaultdict(dict)
     modified_source_codes,modified_labels=[],[]
-
-    # fix: UnboundLocalError 방지를 위한 초기화 추가
-    collisions = 0
-    duplicates = 0
     for i,_ in tqdm(enumerate(labels),total=len(labels)):
             hash1=getMD5("".join(source_codes[i].split()))
             if hash1 not in final_samples:
@@ -258,7 +209,7 @@ def test_filter(source_codes,labels):
 
 
 
-def compute_metrics(p):
+def compute_metrics(p):    
     pred, labels = p
     pred = np.argmax(pred, axis=1)
     accuracy = accuracy_score(y_true=labels, y_pred=pred)

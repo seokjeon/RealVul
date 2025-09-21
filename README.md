@@ -26,6 +26,21 @@
     curl -L "https://drive.google.com/uc?id=1ldXyFvHG41VMrm260cK_JEPYqeb6e6Yw" -o .\LineVul\data\big-vul_dataset\train.csv && `
     curl -L "https://drive.google.com/uc?id=1yggncqivMcP0tzbh8-8Eu02Edwcs44WZ" -o .\LineVul\data\big-vul_dataset\val.csv && `
     curl -L "https://drive.google.com/uc?id=1oodyQqRb9jEcvLMVVKILmu8qHyNwd-zH" -o .\LineVul\linevul\saved_models\checkpoint-best-f1\12heads_linevul_model.bin
+
+    # Real_Vul 다운로드
+    git clone https://github.com/FFmpeg/FFmpeg.git && `
+    git clone https://github.com/ImageMagick/ImageMagick.git && `
+    git clone https://github.com/jekyllt/jasper.git && `
+    git clone https://github.com/krb5/krb5.git && `
+    git clone https://github.com/openssl/openssl.git && `
+    git clone https://github.com/php/php-src.git && `
+    git clone https://github.com/qemu/qemu.git && `
+    git clone https://github.com/the-tcpdump-group/tcpdump.git && `
+    git clone https://github.com/torvalds/linux.git && `
+    git clone https://github.com/chromium/chromium.git
+
+    # 깃 레포를 이용한 .tar.gz 생성
+    Get-ChildItem -Directory | ForEach-Object { tar -czf "$($_.Name).tar.gz" $_.Name }
     ``` 
 
 
@@ -161,7 +176,7 @@
     --dataset_path /app/Dataset/ `
     --output_dir /app/Experiments/LineVul `
     --tokenizer_name microsoft/codebert-base `
-    --model_name /app/12heads_linevul_model.bin `
+    --model_name /app/Experiments/LineVul/best_model `
     --per_device_train_batch_size 8 `
     --per_device_eval_batch_size 8 `
     --num_train_epochs 10 `
@@ -181,19 +196,19 @@
     --dataset_path /app/Dataset/ `
     --output_dir /app/Experiments/LineVul `
     --tokenizer_name microsoft/codebert-base `
-    --model_name /app/12heads_linevul_model.bin `
+    --model_name /app/Experiments/LineVul/best_model `
     --per_device_train_batch_size 8 `
     --per_device_eval_batch_size 8 `
     --num_train_epochs 10 `
     --test_predict
 
     # 2. Real_Vul 데이터셋으로 LineVul 학습
-    docker exec -it linevul-container python /app/Experiments/LineVul/line_vul.py `
+    docker exec -it linevul-dev python /app/Experiments/LineVul/line_vul.py `
     --dataset_csv_path /app/Dataset/Real_Vul_data_append_processed_func.csv `
     --dataset_path /app/Dataset/ `
     --output_dir /app/Experiments/LineVul `
     --tokenizer_name microsoft/codebert-base `
-    --model_name /app/12heads_linevul_model.bin `
+    --model_name /app/Experiments/LineVul/best_model `                  
     --per_device_train_batch_size 8 `
     --per_device_eval_batch_size 8 `
     --num_train_epochs 10 `

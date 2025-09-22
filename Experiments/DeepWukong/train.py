@@ -24,7 +24,7 @@ def train(model: LightningModule, data_module: LightningDataModule,
         monitor="val_recall",
         mode='max',
         filename="{epoch:02d}-{step:02d}-{val_f1:.4f}-{val_loss:.4f}-{val_recall:.4f}",
-        every_n_val_epochs=config.hyper_parameters.val_every_step,
+        every_n_epochs=config.hyper_parameters.val_every_step,  #every_n_val_epochs=config.hyper_parameters.val_every_step,
         save_top_k=5,
     )
     upload_weights = UploadCheckpointCallback(
@@ -43,12 +43,12 @@ def train(model: LightningModule, data_module: LightningDataModule,
     trainer = Trainer(
         max_epochs=config.hyper_parameters.n_epochs,
         gradient_clip_val=config.hyper_parameters.clip_norm,
-        deterministic=True,
+        deterministic=False, # True
         check_val_every_n_epoch=config.hyper_parameters.val_every_step,
         log_every_n_steps=config.hyper_parameters.log_every_n_steps,
         logger=[tensorlogger],
         gpus=gpu,
-        progress_bar_refresh_rate=config.hyper_parameters.progress_bar_refresh_rate,
+        enable_progress_bar=True,  # progress_bar_refresh_rate=config.hyper_parameters.progress_bar_refresh_rate,
         callbacks=[
             lr_logger, early_stopping_callback, checkpoint_callback,
             print_epoch_results, upload_weights

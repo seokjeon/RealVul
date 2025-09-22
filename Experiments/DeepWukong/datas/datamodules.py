@@ -65,8 +65,8 @@ class XFGDataModule(LightningDataModule):
 
     def transfer_batch_to_device(
             self,
-            batch: XFGBatch,
-            device: Optional[torch.device] = None) -> XFGBatch:
+            batch,
+            device, dataloader_idx=None):
         if device is not None:
             batch.move_to_device(device)
         return batch

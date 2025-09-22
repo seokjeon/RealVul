@@ -17,7 +17,8 @@ import torch.nn.functional as F
 from src.metrics import Statistic
 from torch_geometric.data import Batch
 from src.vocabulary import Vocabulary
-from pytorch_lightning.metrics.classification import ConfusionMatrix
+# from pytorch_lightning.metrics.classification import ConfusionMatrix
+from torchmetrics.classification import ConfusionMatrix
 from sklearn.metrics import classification_report
 import pandas as pd
 import json

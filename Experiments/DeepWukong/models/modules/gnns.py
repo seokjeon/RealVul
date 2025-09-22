@@ -6,6 +6,9 @@ import torch.nn.functional as F
 from src.vocabulary import Vocabulary
 from src.models.modules.common_layers import STEncoder
 
+torch.use_deterministic_algorithms(False)
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = True
 
 class GraphConvEncoder(torch.nn.Module):
     """

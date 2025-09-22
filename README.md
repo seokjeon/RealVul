@@ -26,21 +26,6 @@
     curl -L "https://drive.google.com/uc?id=1ldXyFvHG41VMrm260cK_JEPYqeb6e6Yw" -o .\LineVul\data\big-vul_dataset\train.csv && `
     curl -L "https://drive.google.com/uc?id=1yggncqivMcP0tzbh8-8Eu02Edwcs44WZ" -o .\LineVul\data\big-vul_dataset\val.csv && `
     curl -L "https://drive.google.com/uc?id=1oodyQqRb9jEcvLMVVKILmu8qHyNwd-zH" -o .\LineVul\linevul\saved_models\checkpoint-best-f1\12heads_linevul_model.bin
-
-    # Real_Vul 다운로드
-    git clone https://github.com/FFmpeg/FFmpeg.git && `
-    git clone https://github.com/ImageMagick/ImageMagick.git && `
-    git clone https://github.com/jekyllt/jasper.git && `
-    git clone https://github.com/krb5/krb5.git && `
-    git clone https://github.com/openssl/openssl.git && `
-    git clone https://github.com/php/php-src.git && `
-    git clone https://github.com/qemu/qemu.git && `
-    git clone https://github.com/the-tcpdump-group/tcpdump.git && `
-    git clone https://github.com/torvalds/linux.git && `
-    git clone https://github.com/chromium/chromium.git
-
-    # 깃 레포를 이용한 .tar.gz 생성
-    Get-ChildItem -Directory | ForEach-Object { tar -czf "$($_.Name).tar.gz" $_.Name }
     ``` 
 
 

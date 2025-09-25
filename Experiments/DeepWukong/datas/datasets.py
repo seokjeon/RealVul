@@ -28,7 +28,7 @@ class XFGDataset(Dataset):
         self.__vocab = vocab
         self.__XFGs = list()
 
-        root_XFG_path = config.local_dir_xfg_path # os.environ["SLURM_TMPDIR"]
+        root_XFG_path = os.environ["SLURM_TMPDIR"] # config.local_dir_xfg_path # os.environ["SLURM_TMPDIR"]
        
         ray_xfgs=[]
         for xfg_path in __XFG_paths_all:

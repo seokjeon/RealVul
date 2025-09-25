@@ -11,14 +11,23 @@
 - NVIDIA GPU
 - NVIDIA 드라이버
 - Docker
+- Powershell 7.x 이상
 
 **단계별 안내:**
 
-0.  **서브모듈 초기화**
+0.  **서브모듈 초기화 && 데이터셋 다운로드**
     서브모듈 LineVul 하위 모듈을 초기화하고 데이터를 가져옵니다.
     ```sh
+    # 서브모듈 초기화
     git submodule update --init --recursive
+    
+    # Line_Vul 다운로드
+    curl -L "https://drive.google.com/uc?id=1h0iFJbc5DGXCXXvvR6dru_Dms_b2zW4V" -o .\LineVul\data\big-vul_dataset\test.csv && `
+    curl -L "https://drive.google.com/uc?id=1ldXyFvHG41VMrm260cK_JEPYqeb6e6Yw" -o .\LineVul\data\big-vul_dataset\train.csv && `
+    curl -L "https://drive.google.com/uc?id=1yggncqivMcP0tzbh8-8Eu02Edwcs44WZ" -o .\LineVul\data\big-vul_dataset\val.csv && `
+    curl -L "https://drive.google.com/uc?id=1oodyQqRb9jEcvLMVVKILmu8qHyNwd-zH" -o .\LineVul\linevul\saved_models\checkpoint-best-f1\12heads_linevul_model.bin
     ``` 
+
 
 1.  **Docker 이미지 빌드**
 
@@ -26,7 +35,7 @@
     이 과정은 의존성 패키지와 `big-vul` 데이터셋을 모두 이미지에 포함시키며, 최초 빌드 시 시간이 다소 소요될 수 있습니다.
 
     ```sh
-    docker build --no-cache -t linevul-env .
+    docker build --no-cache -t linevul-container .
     ```
 
 2.  **Docker 컨테이너 실행**
@@ -44,13 +53,15 @@
 
 3.  **모델 학습 & 테스트 실행**
 
+    본 과정은 Big_Vul 데이터셋을 이용해 Big_Vul 데이터셋으로 사전학습된 LineVul모델을 평가합니다.
+
     `docker exec`를 사용하여 실행 중인 컨테이너 내부에서 `linevul_main.py` 스크립트를 실행합니다.
 
     - `-w /app/LineVul/linevul`: 컨테이너 내부의 작업 디렉터리를 지정합니다.
     - `2>&1 | tee train.log`: 학습 과정의 모든 출력(표준 출력 및 오류)을 터미널과 `LineVul/linevul/train.log` 파일 양쪽에 기록합니다.
 
     > **참고:** 아래 명령어의 `--epochs` 값은 논문과 동일한 10으로 설정되어 있습니다. 필요에 맞게 조절하십시오.
-    > **참고:** 도커 빌드 도중 gdown 차단으로 컨테이너에 데이터셋과 모델이 없을수 있습니다. 확인후 학습을 수행하십시오. 
+
 
     **host os Linux**
     ```sh
@@ -134,6 +145,61 @@
     tail -f ./LineVul/linevul/train.log
     tail -f ./LineVul/linevul/test.log
     ```
+
+5.  **Real-Vul 학습 & Real-Vul 테스트**
+
+    본 과정은 Real_Vul 데이터셋을 이용해 Big_Vul 데이터셋으로 사전학습된 LineVul모델을 평가합니다.
+
+    **Real-Vul 데이터셋 전처리**
+    ```sh
+    # 1. 불완전한 Real_Vul 데이터셋에 processed_func 열을 추가
+    docker exec -it linevul-container python /app/Experiments/LineVul/append_datasetRealVul.py
+    
+    # 2. pickle 생성
+    docker exec -it linevul-container python /app/Experiments/LineVul/line_vul.py `
+    --dataset_csv_path /app/Dataset/Real_Vul_data_append_processed_func.csv `
+    --dataset_path /app/Dataset/ `
+    --output_dir /app/Experiments/LineVul `
+    --tokenizer_name microsoft/codebert-base `
+    --model_name /app/Experiments/LineVul/best_model `
+    --per_device_train_batch_size 8 `
+    --per_device_eval_batch_size 8 `
+    --num_train_epochs 10 `
+    --prepare_dataset
+    ```
+
+    **host os Linux**
+    ```sh
+    # Real_Vul 데이터셋 테스트(미완)
+    ```
+
+    **host os Windows**
+    ```sh
+    # 1. Real_Vul 데이터셋으로 Big_Vul 데이터셋으로 사전학습된 LineVul 테스트
+    docker exec -it linevul-container python /app/Experiments/LineVul/line_vul.py `
+    --dataset_csv_path /app/Dataset/Real_Vul_data_append_processed_func.csv `
+    --dataset_path /app/Dataset/ `
+    --output_dir /app/Experiments/LineVul `
+    --tokenizer_name microsoft/codebert-base `
+    --model_name /app/Experiments/LineVul/best_model `
+    --per_device_train_batch_size 8 `
+    --per_device_eval_batch_size 8 `
+    --num_train_epochs 10 `
+    --test_predict
+
+    # 2. Real_Vul 데이터셋으로 LineVul 학습
+    docker exec -it linevul-dev python /app/Experiments/LineVul/line_vul.py `
+    --dataset_csv_path /app/Dataset/Real_Vul_data_append_processed_func.csv `
+    --dataset_path /app/Dataset/ `
+    --output_dir /app/Experiments/LineVul `
+    --tokenizer_name microsoft/codebert-base `
+    --model_name /app/Experiments/LineVul/best_model `                  
+    --per_device_train_batch_size 8 `
+    --per_device_eval_batch_size 8 `
+    --num_train_epochs 10 `
+    --train
+    ```
+    > **참고:** EarlyStoppingCallback 설정으로 인해 평가지표가 3회 연속 개선되지 않으면 학습을 중단합니다.
 
 
 ## DeepWukong 재현

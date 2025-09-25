@@ -6,6 +6,7 @@ FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 # 2. Set environment variables to prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
+# ENV SLURM_TMPDIR=/tmp/slurm_job
 
 # 3. Install system dependencies and set up Python environment
 RUN apt-get update && \
@@ -21,62 +22,85 @@ RUN apt-get update && \
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
     pip install --upgrade pip
 
-# 6. Install a specific version of PyTorch compatible with CUDA 11.8
-RUN pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-
-# 7. Set working directory
-WORKDIR /app
-
-# 8. Create a requirements file for the linevul Docker environment.
+# 4. pip install for the linevul Docker environment.
 # 아래의 세 패키지는 충돌을 피하기 위해 다운그레이드 됨
 # matplotlib==3.5.3
 # contourpy==1.0.7
 # scipy==1.10.1
 RUN <<EOF pip install -r /dev/stdin
+#  pip에게 CUDA 11.8용으로 컴파일된 PyTorch 관련 패키지들은 기본 저장소가 아닌 이 주소에서 찾으라고 지시, 그외의 것은 PyPI 참조
+--index-url https://download.pytorch.org/whl/cu118
+--extra-index-url https://pypi.org/simple
+# CUDA 11.8용 PyTorch 스택
+torch==2.0.1+cu118
+torchvision==0.15.2+cu118
+torchaudio==2.0.2
+
+# 데이터/수치 스택(파이썬 3.8~3.11 권장)
+numpy==1.24.2
+scipy==1.10.1
+pandas==1.5.2
+scikit-learn==1.2.1
+
+# 시각화
 matplotlib==3.5.3
 contourpy==1.0.7
-scipy==1.10.1
-beautifulsoup4==4.12.3
-captum==0.7.0
-certifi==2024.7.4
-charset-normalizer==3.3.2
-cycler==0.12.1
-filelock==3.15.4
-fonttools==4.53.1
-fsspec==2024.6.1
-gdown==5.2.0
-huggingface-hub==0.24.5
-idna==3.7
-joblib==1.4.2
 kiwisolver==1.4.5
-numpy==1.24.2
-packaging==24.1
-pandas==1.5.2
-pillow==10.4.0
+cycler==0.12.1
+fonttools==4.53.1
 pyparsing==3.1.2
+pillow==10.4.0
+
+# HF & NLP (구버전 트랜스포머 유지 시 허브 다운그레이드 권고)
+transformers==4.26.0
+tokenizers==0.13.2
+huggingface-hub==0.13.4
+
+# 기타
+beautifulsoup4==4.12.3
+soupsieve==2.5
+regex==2024.7.24
+tqdm==4.66.5
+requests==2.32.3
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
 pytz==2024.1
-PyYAML==6.0.1
-regex==2024.7.24
-requests==2.32.3
-scikit-learn==1.2.1
+filelock==3.15.4
+fsspec==2024.6.1
+gdown==5.2.0
+idna==3.7
+joblib==1.4.2
+packaging==24.1
+certifi==2024.7.4
 six==1.16.0
-soupsieve==2.5
-threadpoolctl==3.5.0
-tokenizers==0.13.2
-tqdm==4.66.5
-transformers==4.26.0
+PyYAML==6.0.1
 typing_extensions==4.12.2
-urllib3==2.2.2
+threadpoolctl==3.5.0
+
+# 분산
+ray==2.9.3
+pydriller==2.5
+omegaconf==2.3.0
 EOF
 
 
-# 9. Copy the rest of the application code
-COPY ./LineVul /app/
+# 5. Set directory, file
+WORKDIR /app
+RUN mkdir -p /app/Experiments/LineVul/best_model
+# mkdir -p /data/project_files && \
+# mkdir -p $SLURM_TMPDIR # Real_Vul 데이터셋이 주어지므로 사용하지 않음
+COPY . /app
+COPY /app/LineVul/linevul/saved_models/checkpoint-best-f1/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/
+RUN cp /app/Experiments/LineVul/best_model/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/pytorch_model.bin
 
-# 10. Download the big-vul dataset, model into the image
-RUN mkdir -p /app/LineVul/data/big-vul_dataset &&     mkdir -p /app/LineVul/linevul/saved_models/checkpoint-best-f1 &&     gdown "https://drive.google.com/uc?id=1h0iFJbc5DGXCXXvvR6dru_Dms_b2zW4V" -O /app/LineVul/data/big-vul_dataset/test.csv &&     gdown "https://drive.google.com/uc?id=1ldXyFvHG41VMrm260cK_JEPYqeb6e6Yw" -O /app/LineVul/data/big-vul_dataset/train.csv &&     gdown "https://drive.google.com/uc?id=1yggncqivMcP0tzbh8-8Eu02Edwcs44WZ" -O /app/LineVul/data/big-vul_dataset/val.csv &&     gdown "https://drive.google.com/uc?id=1oodyQqRb9jEcvLMVVKILmu8qHyNwd-zH" -O /app/LineVul/linevul/saved_models/checkpoint-best-f1/12heads_linevul_model.bin
 
-# 11. Default command to keep the container running
+# HuggingFace 에서 기본 설정 config.json 로드
+RUN python - <<'PY'
+    from transformers import RobertaConfig
+    config = RobertaConfig.from_pretrained("microsoft/codebert-base")
+    config.num_labels = 2              # Line-level classification
+    config.save_pretrained("/app/Experiments/LineVul/best_model")
+    PY
+
+# 6. Default command to keep the container running
 CMD ["tail", "-f", "/dev/null"]

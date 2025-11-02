@@ -90,17 +90,17 @@ RUN mkdir -p /app/Experiments/LineVul/best_model
 # mkdir -p /data/project_files && \
 # mkdir -p $SLURM_TMPDIR # Real_Vul 데이터셋이 주어지므로 사용하지 않음
 COPY . /app
-COPY /app/LineVul/linevul/saved_models/checkpoint-best-f1/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/
-RUN cp /app/Experiments/LineVul/best_model/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/pytorch_model.bin
+RUN cp /app/LineVul/linevul/saved_models/checkpoint-best-f1/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/ && \
+    cp /app/Experiments/LineVul/best_model/12heads_linevul_model.bin /app/Experiments/LineVul/best_model/pytorch_model.bin
 
 
 # HuggingFace 에서 기본 설정 config.json 로드
 RUN python - <<'PY'
-    from transformers import RobertaConfig
-    config = RobertaConfig.from_pretrained("microsoft/codebert-base")
-    config.num_labels = 2              # Line-level classification
-    config.save_pretrained("/app/Experiments/LineVul/best_model")
-    PY
+from transformers import RobertaConfig
+config = RobertaConfig.from_pretrained("microsoft/codebert-base")
+config.num_labels = 2              # Line-level classification
+config.save_pretrained("/app/Experiments/LineVul/best_model")
+PY
 
 # 6. Default command to keep the container running
 CMD ["tail", "-f", "/dev/null"]

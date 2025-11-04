@@ -227,3 +227,8 @@
 
 ### 그 외 다른 소프트웨어 테스트 시
 1. Experiments/DeepWukong/deepwukong_pipeline.sh의 `tar -xf "/data/dataset/${project_name}_source_code.tar.xz" -C $SLURM_TMPDIR`를 `tar -xf "/data/dataset/${project_name}_source_code.tar.gz" -C $SLURM_TMPDIR`로 변경해야 함. all_source_code 만 tar.xz고 나머지는 gz임.
+
+## ReVeal 재현
+1. 도커 컨테이너를 생성한다.
+    - GPU 사용 시: `docker-compose up -d reveal`
+

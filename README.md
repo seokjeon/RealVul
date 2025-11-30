@@ -231,3 +231,7 @@
 1. 도커 컨테이너를 생성한다.
     - GPU 사용 시: `docker-compose up -d reveal`
 
+
+## IVDetect 재현
+    VulnerabilityDetectionResearch/myreadme.md 를 참고하여 전처리와 학습을 수행한다.
+    이때 데이터셋과 소스코드는 myreadme.md 에 명시된 위치로 이동시킨다.

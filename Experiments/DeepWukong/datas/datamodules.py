@@ -18,7 +18,7 @@ class XFGDataModule(LightningDataModule):
         self.__vocab = vocab
         self.__config = config
         self.__data_folder = join(config.root_folder_path,config.split_folder_name)
-        self.__n_workers = 0
+        self.__n_workers = cpu_count()
     @staticmethod
     def collate_wrapper(batch: List[XFGSample]) -> XFGBatch:
         return XFGBatch(batch)

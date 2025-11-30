@@ -27,7 +27,7 @@ import pickle
 def compute_metrics(pred,labels):    
     accuracy = accuracy_score(y_true=labels, y_pred=pred)
     recall = recall_score(y_true=labels, y_pred=pred)
-    precision = precision_score(y_true=labels, y_pred=pred)
+    precision = precision_score(y_true=labels, y_pred=pred, zero_division=0)
     f1 = f1_score(y_true=labels, y_pred=pred)
     confusion_matrix1 = confusion_matrix(y_true=labels, y_pred=pred)
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1,"confusion_matrix":confusion_matrix1.tolist()

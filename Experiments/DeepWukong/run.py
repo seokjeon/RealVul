@@ -4,7 +4,6 @@ module_path = os.path.abspath(os.path.join('.'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 from typing import cast
-
 from commode_utils.common import print_config
 from omegaconf import OmegaConf, DictConfig
 from src.datas.datamodules import XFGDataModule
@@ -44,8 +43,8 @@ def vul_detect(config_path: str):
 
 
 if __name__ == "__main__":
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    os.environ["TORCH_USE_CUDA_DETERMINISTIC"] = "0"
+    # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    # os.environ["TORCH_USE_CUDA_DETERMINISTIC"] = "0"
     __arg_parser = configure_arg_parser()
     __args = __arg_parser.parse_args()
     vul_detect(__args.config)

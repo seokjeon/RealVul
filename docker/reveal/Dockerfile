@@ -1,11 +1,13 @@
 # PyTorch 1.9.0과 관련 패키지들을 위한 Dockerfile (GPU 지원)
 FROM nvidia/cuda:11.1.1-cudnn8-devel-ubuntu20.04
 SHELL ["/bin/bash", "-l", "-c"]
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Etc/UTC
+
+# Python 환경 변수 설정
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # 시스템 패키지 업데이트 및 필요한 의존성 설치
-RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --fix-missing --no-install-recommends  \
     python3.8 \
     python3.8-dev \
     python3-pip \
@@ -28,10 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
 RUN update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
-# Python 환경 변수 설정
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-
 # pip 업그레이드 및 패키지 설치
 RUN pip install --no-cache-dir --upgrade pip
 
@@ -41,7 +39,7 @@ RUN pip install --no-cache-dir torch-geometric==2.3.1
 # torch-scatter와 torch-sparse 설치 (torch-geometric 의존성)
 RUN pip install --no-cache-dir torch-scatter torch-sparse -f https://data.pyg.org/whl/torch-2.0.1+cu118.html
 # 나머지 패키지들 설치
-RUN pip install --no-cache-dir ray[default] \
+RUN pip install --no-cache-dir \
     black==21.6b0 \
     mypy==0.910 \
     pytest==6.2.4 \
@@ -56,12 +54,12 @@ RUN pip install --no-cache-dir ray[default] \
     tqdm==4.67.1 \
     omegaconf==2.2.0 \
     jupyter \
-    setuptools==59.5.0 clang gdown libclang mpmath nltk openpyxl safetensors sympy transformers pygraphviz tensorboardX tensorboard opencensus
+    setuptools==59.5.0 ray clang gdown libclang mpmath nltk openpyxl safetensors sympy transformers pygraphviz graphviz click
 
 WORKDIR /tmp
 
 RUN curl -s "https://get.sdkman.io" | bash && echo 'source ~/.sdkman/bin/sdkman-init.sh' >> ~/.profile
-RUN sdk install gradle 4.10.3 && sdk install java 11.0.25-ms
+RUN sdk install gradle 4.10.3 && sdk install java 11.0.15-trava # 11.0.25-ms
 
 ## 각종 도구(Joern) 설치
 WORKDIR /tools
@@ -70,27 +68,16 @@ RUN git clone https://github.com/VulDetProject/ReVeal.git \
 	&& cd ./ReVeal/code-slicer/joern \
 	&& ./build.sh
 
-#Generation of PDG
-# WORKDIR /code/models/DeepWukong/data/all
+# WORKDIR /code/models/ReVeal/data/all
 # RUN mkdir source_code && cp /data/dataset/all_source_code/11111.c ./source_code # ln -s /data/dataset/all_source_code source_code
 # RUN /tools/ReVeal/code-slicer/joern/joern-parse ./source_code
-# RUN mv parsed/ csv/ && tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/all_csv.tar.gz" csv
+# RUN mv parsed/ csv/
 
-# #Generation of XFG
-# WORKDIR /code/models/DeepWukong/
-# RUN python ./data_generator.py -c ./config/config.yaml
-# RUN tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/XFG_${project_name}.tar.gz" XFG
-
-# #Symbolize and Split Dataset
-# RUN cd /code/models/DeepWukong && python preprocess/dataset_generator.py -c ./config/config.yaml
-# RUN tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/XFG_${project_name}__processed.tar.gz" XFG
-
-# WORKDIR /code/models/DeepWukong
-# # Word Embedding Pretraining
-# RUN python preprocess/word_embedding.py -c ./config/config.yaml
-
-# # Training and Testing
-# RUN python run.py -c ./config/config.yaml
-
+# RUN mkdir data && jupyter nbconvert --execute extract_slices.ipynb --to notebook --inplace
+# python Representational_Learning/word2vec_train.py
 # 기본 명령어 설정 - 컨테이너가 계속 실행되도록
 CMD ["tail", "-f", "/dev/null"]
+
+# mv parsed/ csv/ && mkdir data && jupyter nbconvert --execute extract_slices.ipynb --to notebook --inplace
+# python Representational_Learning/word2vec_train.py --data_paths data/comp_vul_full_data_with_slices.json  --epochs 20 --embedding_size 100
+# python create_ggnn_data.py 부터 쭉~

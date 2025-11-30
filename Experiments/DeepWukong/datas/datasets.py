@@ -24,23 +24,25 @@ class XFGDataset(Dataset):
         self.__config = config
         assert exists(XFG_paths_json), f"{XFG_paths_json} not exists!"
         with open(XFG_paths_json, "r") as f:
-            __XFG_paths_all = list(json.load(f))
+            self.__XFG_paths_all = list(json.load(f))
         self.__vocab = vocab
         self.__XFGs = list()
 
-        root_XFG_path = os.environ["SLURM_TMPDIR"] # config.local_dir_xfg_path # os.environ["SLURM_TMPDIR"]
+        self.root_XFG_path = config.local_dir_xfg_path # os.environ["SLURM_TMPDIR"]
        
-        ray_xfgs=[]
-        for xfg_path in __XFG_paths_all:
-            ray_xfgs.append(read_xfg.remote(join(root_XFG_path,xfg_path)))
-        self.__XFGs = ray.get(ray_xfgs)
-        self.__n_samples = len(self.__XFGs)
+        # ray_xfgs=[]
+        # for xfg_path in __XFG_paths_all:
+        #     ray_xfgs.append(read_xfg.remote(join(root_XFG_path,xfg_path)))
+        # self.__XFGs = ray.get(ray_xfgs)
+        self.__n_samples = len(self.__XFG_paths_all)
 
     def __len__(self) -> int:
         return self.__n_samples
 
     def __getitem__(self, index) -> XFGSample:
-        xfg: XFG = self.__XFGs[index]
+        # xfg: XFG = self.__XFGs[index]
+        xfg_path = join(self.root_XFG_path, self.__XFG_paths_all[index])
+        xfg = XFG(xfg_path)  # 디스크에서 읽기
         return XFGSample(graph=xfg.to_torch(self.__vocab,
                                             self.__config.dataset.token.max_parts),
                          label=xfg.label,file_path=xfg.file_path)

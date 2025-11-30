@@ -3,7 +3,7 @@ from os.path import join, exists
 from argparse import ArgumentParser
 import os
 import sys
-module_path = os.path.abspath('/data/RealVul/Experiments/DeepWukong/')
+module_path = os.path.abspath('.')
 
 if module_path not in sys.path:
     sys.path.append(module_path) 
@@ -28,6 +28,8 @@ USE_CPU = cpu_count()
 
     
 def listdir_nohidden(path):
+    if not exists(path):
+        return
     for f in os.listdir(path):
         if not f.startswith('.'):
             yield f

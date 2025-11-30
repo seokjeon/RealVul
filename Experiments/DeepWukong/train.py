@@ -4,6 +4,7 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 import torch
+torch.set_float32_matmul_precision('medium')
 from commode_utils.callback import PrintEpochResultCallback, UploadCheckpointCallback
 from omegaconf import DictConfig
 from pytorch_lightning import LightningModule, LightningDataModule, Trainer
@@ -58,6 +59,6 @@ def train(model: LightningModule, data_module: LightningDataModule,
 
     trainer.fit(model=model, datamodule=data_module)
     trainer.save_checkpoint(join(tensorlogger.log_dir, "checkpoints","final_model.ckpt"))
-    trainer.test(model=model)
+    trainer.test(model=model, datamodule=data_module)
 if __name__ == "__main__":
     train()

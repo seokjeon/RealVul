@@ -25,7 +25,8 @@ from ray.exceptions import RayTaskError, WorkerCrashedError
 ray.init(
     _temp_dir="/data/tmp",
     dashboard_host="0.0.0.0",  # 모든 IP에서 접근 가능
-    dashboard_port=8265
+    dashboard_port=8265,
+    include_dashboard=True
 )
 USE_CPU = cpu_count()
 xfg_ct=0
@@ -330,7 +331,6 @@ def process_parallel(testcase:str, doneIDs: Set, codeIDtoPath: Dict, root: str,
 
     """
     import logging
-    os.environ["SLURM_TMPDIR"] = "/data/RealVul/Experiments/DeepWukong"
     try:
         if testcase in doneIDs:
             return testcase
@@ -361,7 +361,8 @@ if __name__ == "__main__":
     
     config = cast(DictConfig, OmegaConf.load(config_path))
     root = config.root_folder_path
-    os.environ["SLURM_TMPDIR"] = "/data/RealVul/Experiments/DeepWukong/data/all"
+    # os.environ["SLURM_TMPDIR"] = "/data/RealVul/Experiments/DeepWukong/data/all"
+    # print("SLURM_TMPDIR:",os.environ["SLURM_TMPDIR"])
     
     csv_path=config.csv_data_path
     

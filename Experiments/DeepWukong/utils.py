@@ -326,9 +326,9 @@ def split_list(files,unique_xfg_count, out_root_path: str,config,XFG_path):
     # X_test= remove_conflicts_test(testcaseids,config)
 
       
-    with open(f"train.json", "w") as f:
+    with open(f"{config.root_folder_path}/{config.split_folder_name}/train.json", "w") as f:
         json.dump(files, f)
-    with open(f"test.json", "w") as f:
+    with open(f"{config.root_folder_path}/{config.split_folder_name}/test.json", "w") as f:
         json.dump(X_test, f)
-    with open(f"val.json", "w") as f:
+    with open(f"{config.root_folder_path}/{config.split_folder_name}/val.json", "w") as f:
         json.dump(X_val, f)

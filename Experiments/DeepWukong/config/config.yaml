@@ -19,7 +19,7 @@ split_folder_name: "${project_name}" # current dataset(?) name
 root_folder_path: "data"
 sensiAPI_path: "sensiAPI.txt"
 ts_logger_path: "ts_logger" # for debugging
-csv_data_path: "/data/RealVul/Dataset/Real_Vul_data.csv" # for data generation in realvul *_dataset.csv
+csv_data_path: "/data/dataset/Real_Vul_data.csv" # for data generation in realvul *_dataset.csv
 
 
 save_every_epoch: 1

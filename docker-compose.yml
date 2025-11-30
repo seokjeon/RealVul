@@ -2,6 +2,7 @@ version: '3.8'
 services:
   deepwukong:
     build: ./docker/deepwukong
+    shm_size: '64g'
     deploy:
       resources:
         reservations:
@@ -11,30 +12,22 @@ services:
               capabilities: [gpu]
     volumes:
       - deepwukong_model:/code/models/DeepWukong
-      - deepwukong_dataset:/data/dataset/
-      - deepwukong_config:/config
+      - dataset:/data/dataset/
   deepwukong_without_gpu:
     build: ./docker/deepwukong
     volumes:
       - deepwukong_model:/code/models/DeepWukong
-      - deepwukong_dataset:/data/dataset/
-      - deepwukong_config:/config
+      - dataset:/data/dataset/
 volumes:
+  dataset:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./Dataset
   deepwukong_model:
     driver: local
     driver_opts:
       type: none
       o: bind
       device: ./Experiments/DeepWukong
-  deepwukong_dataset:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./Dataset
-  deepwukong_config:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./Experiments/DeepWukong/config

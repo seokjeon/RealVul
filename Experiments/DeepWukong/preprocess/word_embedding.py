@@ -8,7 +8,7 @@ from omegaconf import OmegaConf, DictConfig
 from typing import cast, List
 from argparse import ArgumentParser
 module_path = os.path.abspath(
-    '/data/RealVul/Experiments/DeepWukong/')
+    '.')
 
 if module_path not in sys.path:
     sys.path.append(module_path)

@@ -1,6 +1,3 @@
 [submodule "LineVul"]
 	path = LineVul
 	url = https://github.com/awsm-research/LineVul.git
-[submodule "VulnerabilityDetectionResearch"]
-	path = VulnerabilityDetectionResearch
-	url = https://github.com/vulnerabilitydetection/VulnerabilityDetectionResearch.git

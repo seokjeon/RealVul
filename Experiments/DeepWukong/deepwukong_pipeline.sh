@@ -32,5 +32,5 @@ python "preprocess/dataset_generator.py" -c "./config/config.yaml"
 python "preprocess/word_embedding.py" -c "./config/config.yaml"
 
 #Training and Testing
-# SLURM_TMPDIR="." python "run.py" -c "./config/config.yaml"
+SLURM_TMPDIR="." python "run.py" -c "./config/config.yaml"
 

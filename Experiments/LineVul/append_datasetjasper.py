@@ -8,9 +8,9 @@ import csv
 from pathlib import Path
 from typing import Dict
 
-real_vul_csv = Path("/app/Dataset/Real_Vul_data.csv")
-source_dir = Path("/app/Dataset/all_source_code")
-output_csv = Path("/app/Dataset/jasper_data_append_processed_func.csv")
+real_vul_csv = Path("/app/RealVul/Dataset/Real_Vul_data.csv")
+source_dir = Path("/app/RealVul/Dataset/all_source_code")
+output_csv = Path("/app/RealVul/Dataset/jasper_data_append_processed_func.csv")
 EMPTY_PLACEHOLDER = " "
 
 def load_source_mapping(source_root: Path) -> Dict[str, Path]:

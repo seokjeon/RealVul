@@ -57,7 +57,13 @@ def unique_data(XFG_root_path,config):
     testcaseids=[]
     df= pd.read_csv(config.csv_data_path)
     # df["vulnerable_line_numbers"] = df["flaw_line_index"]
-    df['unique_file_name'] = df['unique_id'].astype(str) + ".c"
+    try:
+        df['unique_file_name'] = df['unique_id'].astype(str) + ".c"
+    except KeyError:
+        try:
+            df['unique_file_name'] = df['file_name'].astype(str) + ".c"
+        except KeyError:
+            exit(1)
     testcaseids=list(df["unique_file_name"])
    
     xfg_paths = list()

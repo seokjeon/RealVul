@@ -7,7 +7,7 @@ split_token: false
 
 
 big_vul_csv_path: "/data/linevul_data.csv" # useless
-project_name: "all" # for deepwukong_pipline.sh
+project_name: "jasper" # for deepwukong_pipline.sh
 
 local_dir: "true"
 local_dir_xfg_path: "data/${project_name}/XFG"
@@ -19,7 +19,7 @@ split_folder_name: "${project_name}" # current dataset(?) name
 root_folder_path: "data"
 sensiAPI_path: "sensiAPI.txt"
 ts_logger_path: "ts_logger" # for debugging
-csv_data_path: "/data/dataset/Real_Vul_data.csv" # for data generation in realvul *_dataset.csv
+csv_data_path: "/data/dataset/jasper_dataset.csv" # for data generation in realvul *_dataset.csv
 
 
 save_every_epoch: 1

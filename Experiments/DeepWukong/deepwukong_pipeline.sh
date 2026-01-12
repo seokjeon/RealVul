@@ -25,18 +25,37 @@ fi
 mkdir -p "$SLURM_TMPDIR" || { echo "Failed to create $SLURM_TMPDIR" >&2; exit 1; }
 cd $SLURM_TMPDIR
 
-#source_code extraction
+# Source code preparation (prepare.sh에서 다운로드한 파일을 압축 해제)
+# docker-compose.yml에서 /data/dataset으로 마운트됨
 if [ "$ARGUMENT" = "all" ]; then
+    # 전체 데이터 (이미 압축 해제되어 있음)
+    if [ ! -d "/data/dataset/all_source_code" ]; then
+        echo "Extracting all_source_code..."
+        tar -xf "/data/dataset/RealVul_Dataset-all_source_code.tar.xz" -C "/data/dataset/"
+        mv "/data/dataset/source_code" "/data/dataset/all_source_code"
+    fi
     ln -s "/data/dataset/all_source_code" "source_code"
 else
-    project_src_tar_gz=${PROJECT_NAME}_source_code.tar.gz
-    if [ ! -f "/data/dataset/${DS_NAME}-${project_src_tar_gz}" ]; then
-        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${project_src_tar_gz} -O "/data/dataset/${DS_NAME}-${project_src_tar_gz}"
+    # 특정 프로젝트 데이터
+    echo "Extracting ${PROJECT_NAME} source code..."
+    project_src_tar_gz="/data/dataset/${DS_NAME}/${PROJECT_NAME}_source_code.tar.gz"
+    
+    # 압축 파일 찾기
+    if [ -f "${project_src_tar_gz}" ]; then
+        # 압축 해제
+        tar -xf "$project_src_tar_gz" -C .
+    else
+        echo "Error: Cannot find source code archive for ${PROJECT_NAME}" >&2
+        exit 1
     fi
-    tar -xf "/data/dataset/${DS_NAME}-${project_src_tar_gz}" -C .
+    
+    
+    # 파일 확장자 변환 (.c로 통일)
     find source_code/ -type f -exec sh -c 'mv "$1" "${1%.*}.c"' _ {} \;
-    if [ ! -f "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv" ]; then
-        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${PROJECT_NAME}_dataset.csv -O "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv"
+    
+    # 데이터셋 CSV 파일 찾기 및 복사
+    if [ -f "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" ]; then
+        cp "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv"
     fi
 fi
 

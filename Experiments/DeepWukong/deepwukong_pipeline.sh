@@ -30,13 +30,13 @@ if [ "$ARGUMENT" = "all" ]; then
     ln -s "/data/dataset/all_source_code" "source_code"
 else
     project_src_tar_gz=${PROJECT_NAME}_source_code.tar.gz
-    if [ ! -f "/data/dataset/${DS_NAME}-${project_src_tar_gz}" ]; then
-        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${project_src_tar_gz} -O "/data/dataset/${DS_NAME}-${project_src_tar_gz}"
+    if [ ! -f "/data/dataset/${DS_NAME}/${project_src_tar_gz}" ]; then
+        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${project_src_tar_gz} -O "/data/dataset/${DS_NAME}/${project_src_tar_gz}"
     fi
-    tar -xf "/data/dataset/${DS_NAME}-${project_src_tar_gz}" -C .
+    tar -xf "/data/dataset/${DS_NAME}/${project_src_tar_gz}" -C .
     find source_code/ -type f -exec sh -c 'mv "$1" "${1%.*}.c"' _ {} \;
-    if [ ! -f "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv" ]; then
-        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${PROJECT_NAME}_dataset.csv -O "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv"
+    if [ ! -f "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" ]; then
+        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${PROJECT_NAME}_dataset.csv -O "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv"
     fi
 fi
 

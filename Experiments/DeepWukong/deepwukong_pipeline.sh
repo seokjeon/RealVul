@@ -36,26 +36,14 @@ if [ "$PROJECT_NAME" = "all" ]; then
     fi
     ln -s "/data/dataset/$DS_NAME/all_source_code" "source_code"
 else
-    # 특정 프로젝트 데이터
-    echo "Extracting ${PROJECT_NAME} source code..."
-    project_src_tar_gz="/data/dataset/${DS_NAME}/${PROJECT_NAME}_source_code.tar.gz"
-    
-    # 압축 파일 찾기
-    if [ -f "${project_src_tar_gz}" ]; then
-        # 압축 해제
-        tar -xf "$project_src_tar_gz" -C .
-    else
-        echo "Error: Cannot find source code archive for ${PROJECT_NAME}" >&2
-        exit 1
+    project_src_tar_gz=${PROJECT_NAME}_source_code.tar.gz
+    if [ ! -f "/data/dataset/${DS_NAME}/${project_src_tar_gz}" ]; then
+        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${project_src_tar_gz} -O "/data/dataset/${DS_NAME}/${project_src_tar_gz}"
     fi
-    
-    
-    # 파일 확장자 변환 (.c로 통일)
+    tar -xf "/data/dataset/${DS_NAME}/${project_src_tar_gz}" -C .
     find source_code/ -type f -exec sh -c 'mv "$1" "${1%.*}.c"' _ {} \;
-    
-    # 데이터셋 CSV 파일 찾기 및 복사
-    if [ -f "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" ]; then
-        cp "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" "/data/dataset/${DS_NAME}-${PROJECT_NAME}_dataset.csv"
+    if [ ! -f "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv" ]; then
+        wget https://github.com/seokjeon/VP-Bench/releases/download/${DS_NAME}/${PROJECT_NAME}_dataset.csv -O "/data/dataset/${DS_NAME}/${PROJECT_NAME}_dataset.csv"
     fi
 fi
 

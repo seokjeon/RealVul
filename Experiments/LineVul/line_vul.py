@@ -281,44 +281,35 @@ if args.prepare_dataset:
     print("Preparing Dataset...")
     tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
     source_code,labels=prepare_dataset(train_val,tokenizer)
-
     filtered_source_code,filtered_labels=train_filter(source_code,labels)
-    
     train_source_code, val_source_code,train_labels,val_labels = train_test_split(filtered_source_code,filtered_labels, test_size=0.1)
-
     X_chunked_train_tokenized = tokenizer(train_source_code,padding=True, truncation=True, max_length=512)
     X_chunked_val_tokenized = tokenizer(val_source_code,padding=True, truncation=True, max_length=512)
-
     train_dataset = Dataset(X_chunked_train_tokenized, train_labels)
     val_dataset = Dataset(X_chunked_val_tokenized, val_labels)
-    
+    with open(join(dataset_path,"train_dataset.pkl"), "wb") as output_file:
+        pickle.dump(train_dataset, output_file)
+
+    with open(join(dataset_path,"val_dataset.pkl"), "wb") as output_file:
+        pickle.dump(val_dataset, output_file)
+
     test_source_code,test_labels=prepare_dataset(test_data,tokenizer)
-    
     filtered_test_source_code,filtered_test_labels=test_filter(test_source_code,test_labels)
-
-
     X_chunked_test_tokenized = tokenizer(filtered_test_source_code,padding=True, truncation=True, max_length=512)
     test_dataset = Dataset(X_chunked_test_tokenized,filtered_test_labels) 
 
-    with open(join(dataset_path,"train_dataset.pickle"), "wb") as output_file:
-            pickle.dump(train_dataset, output_file)
-
-    with open(join(dataset_path,"val_dataset.pickle"), "wb") as output_file:
-            pickle.dump(val_dataset, output_file)
-    
-    with open(join(dataset_path,"test_dataset.pickle"), "wb") as output_file:
-            pickle.dump(test_dataset, output_file)
+    with open(join(dataset_path,"test_dataset.pkl"), "wb") as output_file:
+        pickle.dump(test_dataset, output_file)
 
 else:
     print("Loading Dataset...")
-    with open(join(dataset_path,"train_dataset.pickle"), "rb") as output_file_train:
-            train_dataset = pickle.load(output_file_train)
+    with open(join(dataset_path,"train_dataset.pkl"), "rb") as output_file_train:
+        train_dataset = pickle.load(output_file_train)
     
-    with open(join(dataset_path,"val_dataset.pickle"), "rb") as output_file_val:
-           val_dataset= pickle.load(output_file_val)
-    
-    with open(join(dataset_path,"test_dataset.pickle"), "rb") as output_file_test:
-           test_dataset= pickle.load(output_file_test)
+    with open(join(dataset_path,"val_dataset.pkl"), "rb") as output_file_val:
+        val_dataset= pickle.load(output_file_val)
+    with open(join(dataset_path,"test_dataset.pkl"), "rb") as output_file_test:
+        test_dataset= pickle.load(output_file_test)
     
 
 if args.train:
@@ -338,7 +329,7 @@ if args.train:
         model=model,
         args=train_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)])
     trainer.train()

@@ -8,6 +8,20 @@ while [[ $# -gt 0 ]]; do
             enable_archive=true
             shift
             ;;
+        --bypass)
+            case $2 in
+                csv|XFG)
+                    BYPASS=$2
+                    echo "Bypassing generation of $BYPASS files."
+                    shift 2
+                    ;;
+                * )
+                    echo "Invalid argument for --bypass. Use 'csv' or 'XFG'."
+                    exit 1
+                    ;;
+            esac
+            shift
+            ;;
         *)
             ARGUMENT=${1:-"all"}
             shift
@@ -48,27 +62,42 @@ else
 fi
 
 #sGeneration of PDG
-/tools/ReVeal/code-slicer/joern/joern-parse "./source_code" # TODO: joern-parse 경로 수정 필요
+if [ "$BYPASS" == "csv" ] && [ -f "/data/dataset/${DS_NAME}/${PROJECT_NAME}_csv.tar.gz" ]; then
+    echo "Bypassing joern, extracting precomputed CSVs..."
+    tar -xf "/data/dataset/${DS_NAME}/${PROJECT_NAME}_csv.tar.gz" -C .
+else
+    /tools/ReVeal/code-slicer/joern/joern-parse "./source_code" # TODO: joern-parse 경로 수정 필요
 
-mkdir csv && find parsed/source_code/ -mindepth 1 -maxdepth 1 -type d | xargs -I{} mv {} csv/ # mv source_code/ ../csv && cd .. # root@22995bd65f6d:/code/models/DeepWukong/data/all# mv parsed csv
-if [ "$enable_archive" = true ]; then
-    tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/${DS_NAME}-${PROJECT_NAME}}_csv.tar.gz" csv # tar -zcvf "Dataset/${project_name}_csv.tar.gz" csv
-# 압축 해제 시, tar --use-compress-program=pigz -xvf archive.tar.gz -C /path/to/dest
+    mkdir csv && find parsed/source_code/ -mindepth 1 -maxdepth 1 -type d | xargs -I{} mv {} csv/ # mv source_code/ ../csv && cd .. # root@22995bd65f6d:/code/models/DeepWukong/data/all# mv parsed csv
+    if [ "$enable_archive" = true ]; then
+        tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/${DS_NAME}/${PROJECT_NAME}_csv.tar.gz" csv # tar -zcvf "Dataset/${project_name}_csv.tar.gz" csv
+        # 압축 해제 시, tar --use-compress-program=pigz -xvf archive.tar.gz -C /path/to/dest
+    fi
 fi
+cd -
 
 #Generation of XFG
-cd -
-PROJECT_NAME="all" SLURM_TMPDIR="." python3 "data_generator.py" -c "./config/config.yaml"
-if [ "$enable_archive" = true ]; then
-    tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/XFG_${DS_NAME}-${PROJECT_NAME}.tar.gz" XFG # 원래 이건데 왼쪽으로 해봄 tar -zcf "/data/dataset/XFG_${project_name}.tar.gz" XFG
+echo $PWD
+if [ "$BYPASS" == "XFG" ] && [ -f "/data/dataset/${DS_NAME}/XFG_${PROJECT_NAME}.tar.gz" ]; then
+    echo "Bypassing PDG generation, extracting precomputed CSVs..."
+    tar -xf "/data/dataset/${DS_NAME}/XFG_${PROJECT_NAME}.tar.gz" -C .
+else
+    PROJECT_NAME="all" SLURM_TMPDIR="." python3 "data_generator.py" -c "./config/config.yaml"
+    if [ "$enable_archive" = true ]; then
+        cd $SLURM_TMPDIR
+        tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/${DS_NAME}/XFG_${PROJECT_NAME}.tar.gz" XFG # 원래 이건데 왼쪽으로 해봄 tar -zcf "/data/dataset/XFG_${project_name}.tar.gz" XFG
+        cd -
+    fi
 fi
+
 #Symbolize and Split Dataset
 python3 "preprocess/dataset_generator.py" -c "./config/config.yaml"
-#cd $SLURM_TMPDIR
+
 if [ "$enable_archive" = true ]; then
-    tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/XFG_${DS_NAME}-${PROJECT_NAME}__processed.tar.gz" XFG # tar -zcf "/data/dataset/XFG_${project_name}__processed.tar.gz" XFG
+    cd $SLURM_TMPDIR
+    tar -I 'pigz -p $(nproc) -6' -cf "/data/dataset/${DS_NAME}/XFG_${PROJECT_NAME}__processed.tar.gz" XFG # tar -zcf "/data/dataset/XFG_${project_name}__processed.tar.gz" XFG
+    cd -
 fi
-#cd -
 
 #Word Embedding Pretraining
 python3 "preprocess/word_embedding.py" -c "./config/config.yaml"

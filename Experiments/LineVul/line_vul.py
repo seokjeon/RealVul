@@ -123,7 +123,6 @@ def create_token_chunks_vulnerable_samples(code_statements,all_special_ids,vulne
             labels.append(0)
     return samples,labels
 
-@ray.remote 
 def read_file_label(sample,tokenizer):
     label=1 if sample["vulnerable_line_numbers"] else 0
     all_special_ids=tokenizer.all_special_ids
@@ -142,22 +141,43 @@ def read_file_label(sample,tokenizer):
         for i in range(0,len(modified_input_ids),510):
             inputs.append(tokenizer.decode(modified_input_ids[i:i+510]))
             labels.append(label)
-    
     return inputs,labels
-    
-    
-    
+
+@ray.remote
+def read_file_label_batch(samples,tokenizer):
+    batch_inputs,batch_labels=[],[]
+    for sample in samples:
+        inputs,labels=read_file_label(sample,tokenizer)
+        batch_inputs.extend(inputs)
+        batch_labels.extend(labels)
+    return batch_inputs,batch_labels
+
+
+
 def prepare_dataset(samples,tokenizer):
-        process_examples=[]
-        for sample_i,sample in tqdm(samples.iterrows(),total=len(samples)):
-            process_examples.append(read_file_label.remote(sample,tokenizer))
-    
-        result=ray.get(process_examples)
-        source_codes,labels=[],[]
-        for source_code,label in result:
-            source_codes.extend(source_code)
-            labels.extend(label)
-        return source_codes,labels
+        records=samples.to_dict("records")
+        batch_size=3000
+        chunk_size = 10  # 한 번에 10개 task만 처리
+        source_codes, labels = [], []
+        
+        all_batches = list(range(0, len(records), batch_size))
+        
+        for chunk_start in tqdm(range(0, len(all_batches), chunk_size)):
+            process_examples = []
+            chunk_end = min(chunk_start + chunk_size, len(all_batches))
+            
+            for i in all_batches[chunk_start:chunk_end]:
+                process_examples.append(
+                    read_file_label_batch.remote(records[i:i+batch_size], tokenizer)
+                )
+            
+            # 10개씩만 join
+            result = ray.get(process_examples)
+            for source_code, label in result:
+                source_codes.extend(source_code)
+                labels.extend(label)
+        
+        return source_codes, labels
 
 
 
@@ -323,7 +343,8 @@ if args.train:
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         num_train_epochs=args.num_train_epochs,
         seed=121,
-        load_best_model_at_end=True)
+        load_best_model_at_end=True,
+        fp16=True)
 
     trainer = Trainer(
         model=model,
@@ -337,7 +358,7 @@ if args.train:
 
 if args.val_predict or args.test_predict:
     best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
-    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size)
+    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
     trainer = Trainer(model=best_model,args=train_args)
 
 if args.val_predict:

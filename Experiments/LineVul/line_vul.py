@@ -20,7 +20,7 @@ import random
 import pickle
 import json
 import hashlib
-
+from pathlib import Path
 from collections import defaultdict
 
 ray.init(_plasma_directory="/tmp")
@@ -300,36 +300,45 @@ test_data=project_df[project_df["dataset_type"]=="test"]
 if args.prepare_dataset:
     print("Preparing Dataset...")
     tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
-    source_code,labels=prepare_dataset(train_val,tokenizer)
-    filtered_source_code,filtered_labels=train_filter(source_code,labels)
-    train_source_code, val_source_code,train_labels,val_labels = train_test_split(filtered_source_code,filtered_labels, test_size=0.1)
-    X_chunked_train_tokenized = tokenizer(train_source_code,padding=True, truncation=True, max_length=512)
-    X_chunked_val_tokenized = tokenizer(val_source_code,padding=True, truncation=True, max_length=512)
-    train_dataset = Dataset(X_chunked_train_tokenized, train_labels)
-    val_dataset = Dataset(X_chunked_val_tokenized, val_labels)
-    with open(join(dataset_path,"train_dataset.pkl"), "wb") as output_file:
-        pickle.dump(train_dataset, output_file)
+    if len(train_val)>0:
+        source_code,labels=prepare_dataset(train_val,tokenizer)
+        filtered_source_code,filtered_labels=train_filter(source_code,labels)
+        train_source_code, val_source_code,train_labels,val_labels = train_test_split(filtered_source_code,filtered_labels, test_size=0.1)
+        X_chunked_train_tokenized = tokenizer(train_source_code,padding=True, truncation=True, max_length=512)
+        X_chunked_val_tokenized = tokenizer(val_source_code,padding=True, truncation=True, max_length=512)
+        train_dataset = Dataset(X_chunked_train_tokenized, train_labels)
+        val_dataset = Dataset(X_chunked_val_tokenized, val_labels)
+        with open(join(dataset_path,"train_dataset.pkl"), "wb") as output_file:
+            pickle.dump(train_dataset, output_file)
 
-    with open(join(dataset_path,"val_dataset.pkl"), "wb") as output_file:
-        pickle.dump(val_dataset, output_file)
+        with open(join(dataset_path,"val_dataset.pkl"), "wb") as output_file:
+            pickle.dump(val_dataset, output_file)
 
-    test_source_code,test_labels=prepare_dataset(test_data,tokenizer)
-    filtered_test_source_code,filtered_test_labels=test_filter(test_source_code,test_labels)
-    X_chunked_test_tokenized = tokenizer(filtered_test_source_code,padding=True, truncation=True, max_length=512)
-    test_dataset = Dataset(X_chunked_test_tokenized,filtered_test_labels) 
+    if len(test_data)>0:
+        test_source_code,test_labels=prepare_dataset(test_data,tokenizer)
+        filtered_test_source_code,filtered_test_labels=test_filter(test_source_code,test_labels)
+        X_chunked_test_tokenized = tokenizer(filtered_test_source_code,padding=True, truncation=True, max_length=512)
+        test_dataset = Dataset(X_chunked_test_tokenized,filtered_test_labels) 
 
-    with open(join(dataset_path,"test_dataset.pkl"), "wb") as output_file:
-        pickle.dump(test_dataset, output_file)
+        with open(join(dataset_path,"test_dataset.pkl"), "wb") as output_file:
+            pickle.dump(test_dataset, output_file)
 
 else:
     print("Loading Dataset...")
-    with open(join(dataset_path,"train_dataset.pkl"), "rb") as output_file_train:
-        train_dataset = pickle.load(output_file_train)
-    
-    with open(join(dataset_path,"val_dataset.pkl"), "rb") as output_file_val:
-        val_dataset= pickle.load(output_file_val)
-    with open(join(dataset_path,"test_dataset.pkl"), "rb") as output_file_test:
-        test_dataset= pickle.load(output_file_test)
+    train_dataset_path = Path(join(dataset_path,"train_dataset.pkl"))
+    if train_dataset_path.exists():
+        with open(train_dataset_path, "rb") as output_file_train:
+            train_dataset = pickle.load(output_file_train)
+
+    val_dataset_path = Path(join(dataset_path,"val_dataset.pkl"))
+    if val_dataset_path.exists():
+        with open(val_dataset_path, "rb") as output_file_val:
+            val_dataset= pickle.load(output_file_val)
+
+    test_dataset_path = Path(join(dataset_path,"test_dataset.pkl"))
+    if test_dataset_path.exists():
+        with open(test_dataset_path, "rb") as output_file_test:
+            test_dataset= pickle.load(output_file_test)
     
 
 if args.train:
@@ -374,6 +383,12 @@ if args.test_predict:
     y_pred_test = np.argmax(raw_pred_test, axis=1)
     test_preds=compute_metrics([raw_pred_test,test_dataset.labels])
     print("Test Metrics",test_preds)
+    # 매핑 결과 저장
+    df = pd.DataFrame({
+        "label": test_dataset.labels,
+        "pred": y_pred_test,
+    })
+    df.to_csv(join(args.output_dir, "test_pred_with_code.csv"), index=False)
 
     
 if args.train_predict:
@@ -383,5 +398,3 @@ if args.train_predict:
     train_preds=compute_metrics([raw_pred_train,train_dataset.labels])
     print("Train Metrics",train_preds)
     log_file.write("Train Metrics:" +json.dumps(train_preds)+"\n")
-
-

@@ -166,7 +166,7 @@ class DeepWuKong(LightningModule):
         # print(batch.file_paths)
         loss = F.cross_entropy(logits, batch.labels)
 
-        result: Dict = {"test_loss", loss}
+        result: Dict = {"test_loss": loss}
         with torch.no_grad():
             _, preds = logits.max(dim=1)
             statistic = Statistic().calculate_statistic(
@@ -177,7 +177,16 @@ class DeepWuKong(LightningModule):
             batch_metric = statistic.calculate_metrics(group="test")
             result.update(batch_metric)
 
-        return {"loss": loss, "statistic": statistic,'preds': preds, 'target': batch.labels,"file_paths":batch.file_paths,"hidden_states":hidden_states}
+        return {"loss": loss, "statistic": statistic,'preds': preds, 'target': batch.labels,"file_paths":batch.file_paths}
+
+    def predict_step(self, batch: XFGBatch, batch_idx: int, dataloader_idx: int = 0):
+        hidden_states, logits = self(batch.graphs)
+        preds = torch.argmax(logits, dim=1)
+        return {
+            "preds": preds,
+            "file_paths": batch.file_paths,
+            "labels": batch.labels,
+        }
 
     def _prepare_epoch_end_log(self, step_outputs: EPOCH_OUTPUT,
                                step: str) -> Dict[str, torch.Tensor]:
@@ -209,16 +218,6 @@ class DeepWuKong(LightningModule):
         print(f"{group} Metrics",metrics)
         log.update(statistic.calculate_metrics(group))
         self.log_dict(log, on_step=False, on_epoch=True)
-        if group in ["test"] and "hidden_states" in step_outputs[0]:
-            hidden_states,preds,labels,file_paths=[],[],[],[]
-            for i in step_outputs:
-                for j in i["file_paths"]:
-                    file_paths.append("/".join(j.split("/")[-4:]))
-                preds.extend(i['preds'].tolist())
-                labels.extend(i['target'].tolist())
-                hidden_states.extend(i['hidden_states'].tolist())
-            with open(join(self.__config.root_folder_path, self.__config.split_folder_name,"hidden_states_test.pickle"),"wb") as f:
-                pickle.dump([hidden_states,labels],f)
         
                 
 
@@ -228,7 +227,6 @@ class DeepWuKong(LightningModule):
     def validation_epoch_end(self, validation_step_output: EPOCH_OUTPUT):
         self._shared_epoch_end(validation_step_output, "val")
         
-
     def test_epoch_end(self, test_step_output: EPOCH_OUTPUT):
         self._shared_epoch_end(test_step_output, "test")
 

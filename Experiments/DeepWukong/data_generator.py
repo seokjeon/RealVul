@@ -361,7 +361,7 @@ if __name__ == "__main__":
     
     source_root_path = join(os.environ["SLURM_TMPDIR"],config.local_dir_source_code_path)
     out_root_path=join(os.environ["SLURM_TMPDIR"],config.local_dir_xfg_path)
-    vul_data_csv=pd.read_csv(csv_path)
+    vul_data_csv=pd.read_csv(csv_path, dtype={'vulnerable_line_numbers': str})
     # vul_data_csv["vulnerable_line_numbers"] = vul_data_csv["flaw_line_index"]
     try:
         vul_data_csv['unique_file_name'] = vul_data_csv['unique_id'].astype(str) + ".c"

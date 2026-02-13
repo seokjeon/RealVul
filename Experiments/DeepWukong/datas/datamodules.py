@@ -63,6 +63,18 @@ class XFGDataModule(LightningDataModule):
             pin_memory=True,
         )
 
+    def predict_dataloader(self) -> DataLoader:
+        test_dataset_path = join(self.__data_folder, "test.json")
+        test_dataset = self.__create_dataset(test_dataset_path)
+        return DataLoader(
+            test_dataset,
+            batch_size=self.__config.hyper_parameters.test_batch_size,
+            shuffle=False,
+            num_workers=self.__n_workers,
+            collate_fn=self.collate_wrapper,
+            pin_memory=True,
+        )
+
     def transfer_batch_to_device(
             self,
             batch,

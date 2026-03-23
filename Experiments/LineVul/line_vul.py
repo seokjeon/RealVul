@@ -21,6 +21,7 @@ import pickle
 import json
 import hashlib
 from pathlib import Path
+from datetime import datetime
 from collections import defaultdict
 
 ray.init(_plasma_directory="/tmp")
@@ -93,6 +94,20 @@ class Dataset(torch.utils.data.Dataset):
         return item     
     def __len__(self):
         return len(self.encodings["input_ids"])
+
+
+def parse_vulnerable_line_numbers(value):
+    if pd.isna(value) or value == "":
+        return []
+    if isinstance(value, str):
+        raw_values = [part.strip() for part in value.split(",") if part.strip()]
+    else:
+        raw_values = [str(value)]
+
+    vulnerable_line_numbers = []
+    for raw_value in raw_values:
+        vulnerable_line_numbers.append(int(float(raw_value)))
+    return vulnerable_line_numbers
     
 def create_token_chunks_vulnerable_samples(code_statements,all_special_ids,vulnerable_line_numbers):
     i=0
@@ -124,12 +139,13 @@ def create_token_chunks_vulnerable_samples(code_statements,all_special_ids,vulne
     return samples,labels
 
 def read_file_label(sample,tokenizer):
-    label=1 if sample["vulnerable_line_numbers"] else 0
+    vulnerable_line_numbers = parse_vulnerable_line_numbers(sample["vulnerable_line_numbers"])
+    label=1 if vulnerable_line_numbers else 0
     all_special_ids=tokenizer.all_special_ids
     source_code=sample["processed_func"].split("\n")
     inputs,labels=[],[]
     if label==1:
-        samples,mixed_labels=create_token_chunks_vulnerable_samples(tokenizer(source_code)["input_ids"],all_special_ids,sample["vulnerable_line_numbers"].split(","))
+        samples,mixed_labels=create_token_chunks_vulnerable_samples(tokenizer(source_code)["input_ids"],all_special_ids,vulnerable_line_numbers)
         inputs.extend(samples)
         labels.extend(mixed_labels)
     else:
@@ -242,6 +258,42 @@ def compute_metrics(p):
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1,"confusion_matrix":confusion_matrix1.tolist()
            }
 
+# Transformer 모델의 마지막 hidden state 벡터를 추출하여 저장하는 함수 (<s>/<cls> 벡터 사용)
+def export_last_hidden_state_vectors(model, dataset, batch_size, output_path):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    model.eval()
+
+    feature_batches = []
+    label_batches = []
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc=f"Exporting hidden states to {Path(output_path).name}"):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            outputs = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+            cls_hidden_states = outputs.hidden_states[-1][:, 0, :] # CLS 토큰의 hidden state 벡터 추출
+            feature_batches.append(cls_hidden_states.cpu().numpy())
+            if "labels" in batch:
+                label_batches.append(batch["labels"].cpu().numpy())
+
+    hidden_size = model.config.hidden_size
+    features = np.concatenate(feature_batches, axis=0) if feature_batches else np.empty((0, hidden_size), dtype=np.float32)
+    labels = np.concatenate(label_batches, axis=0) if label_batches else np.empty((0,), dtype=np.int64)
+    np.savez_compressed(output_path, features=features, labels=labels)
+    print(f"Saved CLS last hidden states to {output_path}")
+    from tsne import plot_embedding
+    plot_embedding(features, labels, title=str(Path(output_path).with_suffix("")), new=True)
+
+def build_hidden_state_output_path(output_dir, split_name, export_timestamp):
+    return join(output_dir, f"{export_timestamp}_{split_name}_last_hidden_state_vectors.npz")
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset_csv_path", type=str, required=True,
@@ -286,8 +338,10 @@ if not exists(dataset_path):
 
 if not exists(output_dir):
         os.makedirs(output_dir)
-        
 
+train_dataset = None
+val_dataset = None
+test_dataset = None
 
 
 project_df=pd.read_csv(dataset_csv_path)
@@ -364,21 +418,50 @@ if args.train:
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)])
     trainer.train()
     trainer.save_model(join(args.output_dir,"best_model"))
+    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    if train_dataset is not None:
+        export_last_hidden_state_vectors(
+            trainer.model,
+            train_dataset,
+            args.per_device_eval_batch_size,
+            build_hidden_state_output_path(args.output_dir, "train", export_timestamp),
+        )
+
 
 if args.val_predict or args.test_predict:
     best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
     train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
     trainer = Trainer(model=best_model,args=train_args)
 
+
 if args.val_predict:
     print("Validation Results...")
+    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    if val_dataset is not None:
+        export_last_hidden_state_vectors(
+            best_model,
+            val_dataset,
+            args.per_device_eval_batch_size,
+            build_hidden_state_output_path(args.output_dir, "val", export_timestamp),
+        )
+
     raw_pred_val, b, c = trainer.predict(val_dataset)
     y_pred_val = np.argmax(raw_pred_val, axis=1)
     val_metrics=compute_metrics([raw_pred_val,val_dataset.labels])
     print("Validation Metrics",val_metrics)
-    
+
+
 if args.test_predict:
     print("Test Results...")
+    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    if test_dataset is not None:
+        export_last_hidden_state_vectors(
+            best_model,
+            test_dataset,
+            args.per_device_eval_batch_size,
+            build_hidden_state_output_path(args.output_dir, "test", export_timestamp),
+        )
+
     raw_pred_test, b, c = trainer.predict(test_dataset)
     y_pred_test = np.argmax(raw_pred_test, axis=1)
     test_preds=compute_metrics([raw_pred_test,test_dataset.labels])
@@ -393,6 +476,18 @@ if args.test_predict:
     
 if args.train_predict:
     print("Train Results...")
+    best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
+    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
+    trainer = Trainer(model=best_model,args=train_args)
+    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    if train_dataset is not None:
+        export_last_hidden_state_vectors(
+            best_model,
+            train_dataset,
+            args.per_device_eval_batch_size,
+            build_hidden_state_output_path(args.output_dir, "train", export_timestamp),
+        )
+
     raw_pred_train, b, c = trainer.predict(train_dataset)
     y_pred_train = np.argmax(raw_pred_train, axis=1)
     train_preds=compute_metrics([raw_pred_train,train_dataset.labels])

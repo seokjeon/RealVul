@@ -1,67 +1,67 @@
 import json
 import os
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn import manifold
-from sklearn.model_selection import train_test_split
-import seaborn as sns
-sns.set(rc={'figure.figsize': (11.7, 8.27)})
-palette = sns.color_palette("bright", 2)
+try:
+    import seaborn as sns
+except ModuleNotFoundError:
+    sns = None
+
+if sns is not None:
+    sns.set(rc={'figure.figsize': (11.7, 8.27)})
+    palette = sns.color_palette("bright", 2)
+else:
+    plt.rcParams['figure.figsize'] = (11.7, 8.27)
+    palette = None
 
 
 def plot_embedding(X_org, y, title=None, new=True):
-    # X, _, Y, _ = train_test_split(X_org, y, test_size=0.5)
-    # X, Y = np.asarray(X), np.asarray(Y)
-    # X = X[:10000]
-    # Y = Y[:10000]
-    # y_v = ['Vulnerable' if yi == 1 else 'Non-Vulnerable' for yi in Y]
-    if not new and os.path.exists(str(title) + '-tsne-features.json'):
-        file = open(str(title) + '-tsne-features.json', 'r')
-        _x, _y = json.load(file)
+    X_org = np.asarray(X_org)
+    Y = np.asarray(y)
+
+    if X_org.shape[0] < 2:
+        print(f"Skipping TSNE for {title}: need at least 2 samples, got {X_org.shape[0]}")
+        return
+
+    cache_path = str(title) + '-tsne-features.json'
+    if not new and os.path.exists(cache_path):
+        with open(cache_path, 'r') as file:
+            _x, _y = json.load(file)
         X = np.array(_x)
         Y = np.array(_y)
     else:
-        tsne = manifold.TSNE(n_components=2, init='pca',
-                             random_state=0, n_jobs=-2)
+        perplexity = min(30, X_org.shape[0] - 1)
+        tsne = manifold.TSNE(n_components=2, init='pca', random_state=0, perplexity=perplexity)
         print('Fitting TSNE!')
-        X = tsne.fit_transform(X)
+        X = tsne.fit_transform(X_org)
         x_min, x_max = np.min(X, 0), np.max(X, 0)
-        X = (X - x_min) / (x_max - x_min)
+        denom = np.where((x_max - x_min) == 0, 1, (x_max - x_min))
+        X = (X - x_min) / denom
 
-        file_ = open(str(title) + '-tsne-features.json', 'w')
-        if isinstance(X, np.ndarray):
-            _x = X.tolist()
-            _y = Y.tolist()
-        else:
-            _x = X
-            _y = Y
-        json.dump([_x, _y], file_)
-        file_.close()
-    sns.set(style='white')
-    plt.figure(title, figsize=(10, 10), edgecolor='black')
+        with open(cache_path, 'w') as file_:
+            json.dump([X.tolist(), Y.tolist()], file_)
+
+    if sns is not None:
+        sns.set(style='white')
+    plt.figure(figsize=(10, 10), edgecolor='black')
     plt.scatter(X[Y == 0][:, 0], X[Y == 0][:, 1],
-                marker='.', c="darkgrey", s=12, linewidth=3.5)
+                marker='.', c="tab:blue", s=12, linewidth=3.5, label='Non-Vuln')
     plt.scatter(X[Y == 1][:, 0], X[Y == 1][:, 1],
-                marker='.', c="black", s=12, linewidth=3.5)
+                marker='^', c="tab:orange", s=12, linewidth=3.5, label='Vuln')
     plt.xticks([]), plt.yticks([])
-    # sns.scatterplot(X[:, 0], X[:, 1], hue=y_v, palette=['red', 'green'])
-    # for i in range(X.shape[0]):
-    #     if Y[i] == 0:
-    #         plt.scatter(X[i, 0], X[i, 1], marker='.', c="darkgrey", s=10)
-    #     else:
-    #         plt.scatter(X[i, 0], X[i, 1], marker='.', c="black", s=10)
-    # plt.scatter()
-    # plt.xticks([]), plt.yticks([])
     if title is not None:
         plt.title("")
     plt.tight_layout()
-    plt.savefig(title + '.jpeg', dpi=1000)
-    plt.show()
+    plt.savefig(str(title) + '.jpeg', dpi=1000)
+    plt.close()
 
 
 if __name__ == '__main__':
     x_a = np.random.uniform(0, 1, size=(32, 256))
     targets = np.random.randint(0, 2, size=(32))
     print(targets)
-    plot_embedding(x_a, targets)
+    plot_embedding(x_a, targets, title='tsne_demo')
     print("Computing t-SNE embedding")

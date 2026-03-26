@@ -350,6 +350,8 @@ parser.add_argument("--test_predict", default=False,action='store_true',
                     help="test_predict")
 parser.add_argument("--train_predict", default=False,action='store_true',
                     help="train_predict")
+parser.add_argument("--eval_model_name", type=str, default=None,
+                    help="optional model path used for eval/test instead of output_dir/best_model")
 
 args = parser.parse_args()
 
@@ -461,8 +463,9 @@ if args.train:
 
 
 if args.val_predict or args.test_predict:
-    best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
-    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=use_fp16)
+    eval_model_name = args.eval_model_name or join(args.output_dir,"best_model")
+    best_model= RobertaForSequenceClassification.from_pretrained(eval_model_name, num_labels=2)
+    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
     trainer = Trainer(model=best_model,args=train_args)
 
 
@@ -511,17 +514,8 @@ if args.train_predict:
     best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
     train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=use_fp16)
     trainer = Trainer(model=best_model,args=train_args)
-    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    if train_dataset is not None:
-        export_last_hidden_state_vectors(
-            best_model,
-            train_dataset,
-            args.per_device_eval_batch_size,
-            build_hidden_state_output_path(args.output_dir, "train", export_timestamp),
-        )
 
     raw_pred_train, b, c = trainer.predict(train_dataset)
     y_pred_train = np.argmax(raw_pred_train, axis=1)
     train_preds=compute_metrics([raw_pred_train,train_dataset.labels])
     print("Train Metrics",train_preds)
-    log_file.write("Train Metrics:" +json.dumps(train_preds)+"\n")

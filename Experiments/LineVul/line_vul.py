@@ -5,7 +5,7 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 import torch
 import gc
 import pickle
-from transformers import TrainingArguments, Trainer,RobertaForSequenceClassification,RobertaTokenizer
+from transformers import TrainingArguments, Trainer, TrainerCallback,RobertaForSequenceClassification,RobertaTokenizer
 from transformers import EarlyStoppingCallback
 from sklearn.utils import class_weight
 import ray
@@ -27,6 +27,34 @@ from collections import defaultdict
 ray.init(_plasma_directory="/tmp")
 torch.cuda.empty_cache()
 gc.collect()
+
+TRAIN_EPOCH_LOSS_PREFIX = "TRAIN_EPOCH_LOSS"
+TRAINING_LOSS_LOG_NAME = "training_loss.log"
+
+
+class EpochTrainingLossLoggerCallback(TrainerCallback):
+    def __init__(self, output_dir):
+        self.log_path = Path(output_dir) / TRAINING_LOSS_LOG_NAME
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.log_path.write_text("", encoding="utf-8")
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs:
+            return
+        if "loss" not in logs or "epoch" not in logs:
+            return
+        if "eval_loss" in logs or "train_loss" in logs:
+            return
+
+        payload = {
+            "epoch": float(logs["epoch"]),
+            "loss": float(logs["loss"]),
+        }
+        line = f"{TRAIN_EPOCH_LOSS_PREFIX} {json.dumps(payload, sort_keys=True)}"
+        print(line, flush=True)
+        with self.log_path.open("a", encoding="utf-8") as output_file:
+            output_file.write(line + "\n")
+
 
 def getMD5(s):
     hl = hashlib.md5()
@@ -431,6 +459,8 @@ model_name=args.model_name
 dataset_csv_path=args.dataset_csv_path
 output_dir=args.output_dir
 dataset_path= args.dataset_path
+use_fp16 = torch.cuda.is_available()
+print(f"Using fp16: {use_fp16}")
 
 if not exists(dataset_path):
         os.makedirs(dataset_path)
@@ -497,16 +527,18 @@ else:
 if args.train:
     print("Training Dataset...")
     model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=2)
+    loss_logger_callback = EpochTrainingLossLoggerCallback(args.output_dir)
     train_args = TrainingArguments(
         output_dir=args.output_dir,
         evaluation_strategy="epoch",
         save_strategy="epoch",
+        logging_strategy="epoch",
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         num_train_epochs=args.num_train_epochs,
         seed=121,
         load_best_model_at_end=True,
-        fp16=True)
+        fp16=use_fp16)
 
     trainer = Trainer(
         model=model,
@@ -514,7 +546,7 @@ if args.train:
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)])
+        callbacks=[loss_logger_callback, EarlyStoppingCallback(early_stopping_patience=3)])
     trainer.train()
     trainer.save_model(join(args.output_dir,"best_model"))
     export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -586,7 +618,7 @@ if args.test_predict:
 if args.train_predict:
     print("Train Results...")
     best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
-    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
+    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=use_fp16)
     trainer = Trainer(model=best_model,args=train_args)
 
     raw_pred_train, b, c = trainer.predict(train_dataset)

@@ -323,6 +323,103 @@ def build_hidden_state_output_path(output_dir, split_name, export_timestamp):
     return join(output_dir, f"{export_timestamp}_{split_name}_last_hidden_state_vectors.npz")
 
 
+RAW_MODEL_EVAL_DIRNAME = "raw_model_eval"
+COMBINED_TEST_TSNE_BASENAME = "combined_test_last_hidden_state_vectors"
+
+
+def find_latest_hidden_state_output(output_dir, split_name="test"):
+    candidates = sorted(
+        Path(output_dir).glob(f"*_{split_name}_last_hidden_state_vectors.npz"),
+        key=lambda path: path.name,
+    )
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def load_hidden_state_output(output_path):
+    with np.load(output_path) as payload:
+        return np.asarray(payload["features"]), np.asarray(payload["labels"])
+
+
+# cls토큰의 hidden state 벡터가 정상인지 검증(생략해도 무방)
+def validate_paired_hidden_state_outputs(
+    fine_features,
+    fine_labels,
+    raw_features,
+    raw_labels,
+    *,
+    fine_output_path,
+    raw_output_path,
+):
+    # csl토큰의 hidden state 벡터는 2D 배열이어야 한다.
+    if fine_features.ndim != 2 or raw_features.ndim != 2:
+        raise ValueError(
+            "Expected 2D feature arrays for paired TSNE: "
+            f"{fine_output_path} -> {fine_features.shape}, "
+            f"{raw_output_path} -> {raw_features.shape}"
+        )
+
+    # fine-tuned과 raw 모델의 feature 벡터 차원이 일치해야 한다.
+    if fine_features.shape[1] != raw_features.shape[1]:
+        raise ValueError(
+            "Fine-tuned and raw test feature dimensions do not match: "
+            f"{fine_output_path} -> {fine_features.shape}, "
+            f"{raw_output_path} -> {raw_features.shape}"
+        )
+
+    # fine-tuned과 raw 모델의 테스트 샘플 수가 일치해야 한다.
+    if fine_features.shape[0] != raw_features.shape[0]:
+        raise ValueError(
+            "Fine-tuned and raw test sample counts do not match: "
+            f"{fine_output_path} -> {fine_features.shape[0]}, "
+            f"{raw_output_path} -> {raw_features.shape[0]}"
+        )
+
+
+def maybe_export_paired_test_tsne(raw_output_path):
+    raw_output_path = Path(raw_output_path)
+    raw_output_dir = raw_output_path.parent
+    if raw_output_dir.name != RAW_MODEL_EVAL_DIRNAME:
+        return
+
+    fine_output_dir = raw_output_dir.parent
+    fine_output_path = find_latest_hidden_state_output(fine_output_dir, split_name="test")
+    if fine_output_path is None:
+        print(
+            "Skipping paired TSNE: fine-tuned test hidden states not found under "
+            f"{fine_output_dir}"
+        )
+        return
+
+    # features은 마지막 hidden layer의 cls토큰의 벡터, labels는 취약/비취약
+    fine_features, fine_labels = load_hidden_state_output(fine_output_path)
+    raw_features, raw_labels = load_hidden_state_output(raw_output_path)
+
+    # cls토큰의 hidden state 벡터가 정상인지 검증
+    validate_paired_hidden_state_outputs(
+        fine_features,
+        fine_labels,
+        raw_features,
+        raw_labels,
+        fine_output_path=fine_output_path,
+        raw_output_path=raw_output_path,
+    )
+
+    from tsne import plot_paired_embedding
+
+    combined_output_base = fine_output_dir / COMBINED_TEST_TSNE_BASENAME # vuln_patch/combined_test_last_hidden_state_vectors.npz 경로
+    plot_paired_embedding(
+        fine_features,
+        fine_labels,
+        raw_features,
+        raw_labels,
+        title=str(combined_output_base),
+        new=True,   # tsne 를 위한 연산은 건너뛰고, 캐시를 활용해 jpeg 만 생성하려면 new=False 로 수정하세요.
+    )
+    print(f"Saved paired test TSNE to {combined_output_base}.jpeg")
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset_csv_path", type=str, required=True,
                     help="The input training data file (a csv file).")
@@ -489,12 +586,18 @@ if args.val_predict:
 if args.test_predict:
     print("Test Results...")
     export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    test_hidden_state_output_path = None
     if test_dataset is not None:
+        test_hidden_state_output_path = build_hidden_state_output_path(
+            args.output_dir,
+            "test",
+            export_timestamp,
+        )
         export_last_hidden_state_vectors(
             best_model,
             test_dataset,
             args.per_device_eval_batch_size,
-            build_hidden_state_output_path(args.output_dir, "test", export_timestamp),
+            test_hidden_state_output_path,
         )
 
     raw_pred_test, b, c = trainer.predict(test_dataset)
@@ -507,6 +610,9 @@ if args.test_predict:
         "pred": y_pred_test,
     })
     df.to_csv(join(args.output_dir, "test_pred_with_code.csv"), index=False)
+
+    if test_hidden_state_output_path is not None:
+        maybe_export_paired_test_tsne(test_hidden_state_output_path)
 
     
 if args.train_predict:

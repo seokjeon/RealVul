@@ -30,6 +30,8 @@ gc.collect()
 
 TRAIN_EPOCH_LOSS_PREFIX = "TRAIN_EPOCH_LOSS"
 TRAINING_LOSS_LOG_NAME = "training_loss.log"
+DEFAULT_BASELINE_MODEL_NAME = "/app/RealVul/Experiments/LineVul/best_model"
+REQUIRED_MODEL_ARTIFACT_NAMES = ("config.json", "pytorch_model.bin")
 
 
 class EpochTrainingLossLoggerCallback(TrainerCallback):
@@ -137,7 +139,9 @@ def parse_vulnerable_line_numbers(value):
         vulnerable_line_numbers.append(int(float(raw_value)))
     return vulnerable_line_numbers
     
-def create_token_chunks_vulnerable_samples(code_statements,all_special_ids,vulnerable_line_numbers):
+def create_token_chunks_vulnerable_samples(
+    code_statements, all_special_ids, vulnerable_line_numbers, tokenizer
+):
     i=0
     samples,labels=[],[]
     while i<len(code_statements):
@@ -173,7 +177,12 @@ def read_file_label(sample,tokenizer):
     source_code=sample["processed_func"].split("\n")
     inputs,labels=[],[]
     if label==1:
-        samples,mixed_labels=create_token_chunks_vulnerable_samples(tokenizer(source_code)["input_ids"],all_special_ids,vulnerable_line_numbers)
+        samples,mixed_labels=create_token_chunks_vulnerable_samples(
+            tokenizer(source_code)["input_ids"],
+            all_special_ids,
+            vulnerable_line_numbers,
+            tokenizer,
+        )
         inputs.extend(samples)
         labels.extend(mixed_labels)
     else:
@@ -420,73 +429,64 @@ def maybe_export_paired_test_tsne(raw_output_path):
     print(f"Saved paired test TSNE to {combined_output_base}.jpeg")
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--dataset_csv_path", type=str, required=True,
-                    help="The input training data file (a csv file).")
-parser.add_argument("--tokenizer_name",  type=str, required=True,
-                    help="tokenizer_name")
-parser.add_argument("--model_name", type=str, required=True,
-                    help="model path")
-parser.add_argument("--output_dir", type=str, required=True,
-                    help="output_dir")
-parser.add_argument("--per_device_train_batch_size", type=int, required=True,
-                    help="per_device_train_batch_size")
-parser.add_argument("--per_device_eval_batch_size", type=int, required=True,
-                    help="per_device_eval_batch_size")
-parser.add_argument("--num_train_epochs", type=int, required=True,
-                    help="num_train_epochs")
-parser.add_argument("--dataset_path", type=str, required=True,
-                    help="dataset_path")
-parser.add_argument("--prepare_dataset", default=False,action='store_true',
-                    help="prepare_dataset")
-parser.add_argument("--train",default=False,action='store_true',
-                    help="train")
-parser.add_argument("--val_predict", default=False,action='store_true',
-                    help="val_predict")
-parser.add_argument("--test_predict", default=False,action='store_true',
-                    help="test_predict")
-parser.add_argument("--train_predict", default=False,action='store_true',
-                    help="train_predict")
-parser.add_argument("--eval_model_name", type=str, default=None,
-                    help="optional model path used for eval/test instead of output_dir/best_model")
-
-args = parser.parse_args()
-
-print("Arguments", args)
-
-tokenizer_name=args.tokenizer_name
-model_name=args.model_name
-dataset_csv_path=args.dataset_csv_path
-output_dir=args.output_dir
-dataset_path= args.dataset_path
-use_fp16 = torch.cuda.is_available()
-print(f"Using fp16: {use_fp16}")
-
-if not exists(dataset_path):
-        os.makedirs(dataset_path)
-
-if not exists(output_dir):
-        os.makedirs(output_dir)
-
-train_dataset = None
-val_dataset = None
-test_dataset = None
+def build_arg_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset_csv_path", type=str, required=True,
+                        help="The input training data file (a csv file).")
+    parser.add_argument("--tokenizer_name",  type=str, required=True,
+                        help="tokenizer_name")
+    parser.add_argument("--model_name", type=str, required=True,
+                        help="model path")
+    parser.add_argument("--output_dir", type=str, required=True,
+                        help="output_dir")
+    parser.add_argument("--per_device_train_batch_size", type=int, required=True,
+                        help="per_device_train_batch_size")
+    parser.add_argument("--per_device_eval_batch_size", type=int, required=True,
+                        help="per_device_eval_batch_size")
+    parser.add_argument("--num_train_epochs", type=int, required=True,
+                        help="num_train_epochs")
+    parser.add_argument("--dataset_path", type=str, required=True,
+                        help="dataset_path")
+    parser.add_argument("--prepare_dataset", default=False,action='store_true',
+                        help="prepare_dataset")
+    parser.add_argument("--train",default=False,action='store_true',
+                        help="train")
+    parser.add_argument("--val_predict", default=False,action='store_true',
+                        help="val_predict")
+    parser.add_argument("--test_predict", default=False,action='store_true',
+                        help="test_predict")
+    parser.add_argument("--train_predict", default=False,action='store_true',
+                        help="train_predict")
+    parser.add_argument("--eval_model_name", type=str, default=None,
+                        help="optional model path used for eval/test instead of output_dir/best_model")
+    parser.add_argument("--extended-realvul", dest="extended_realvul", default=False, action='store_true',
+                        help="prepare the test split, evaluate both models, and emit paired TSNE artifacts")
+    parser.add_argument("--baseline_model_name", type=str, default=DEFAULT_BASELINE_MODEL_NAME,
+                        help="baseline model path used in --extended-realvul mode")
+    return parser
 
 
-project_df=pd.read_csv(dataset_csv_path)
-project_df["vulnerable_line_numbers"]=project_df["vulnerable_line_numbers"].fillna("")
-train_val=project_df[project_df["dataset_type"]=="train_val"]
-test_data=project_df[project_df["dataset_type"]=="test"]
+def require_model_artifacts(model_dir, label):
+    model_path = Path(model_dir)
+    for artifact_name in REQUIRED_MODEL_ARTIFACT_NAMES:
+        artifact_path = model_path / artifact_name
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"Expected {label}/{artifact_name} not found: {artifact_path}")
 
 
+def prepare_dataset_pickles(train_val, test_data, tokenizer, dataset_path, *, test_only=False):
+    train_dataset = None
+    val_dataset = None
+    test_dataset = None
 
-if args.prepare_dataset:
-    print("Preparing Dataset...")
-    tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
-    if len(train_val)>0:
+    if not test_only and len(train_val) > 0:
         source_code,labels=prepare_dataset(train_val,tokenizer)
         filtered_source_code,filtered_labels=train_filter(source_code,labels)
-        train_source_code, val_source_code,train_labels,val_labels = train_test_split(filtered_source_code,filtered_labels, test_size=0.1)
+        train_source_code, val_source_code,train_labels,val_labels = train_test_split(
+            filtered_source_code,
+            filtered_labels,
+            test_size=0.1,
+        )
         X_chunked_train_tokenized = tokenizer(train_source_code,padding=True, truncation=True, max_length=512)
         X_chunked_val_tokenized = tokenizer(val_source_code,padding=True, truncation=True, max_length=512)
         train_dataset = Dataset(X_chunked_train_tokenized, train_labels)
@@ -497,16 +497,23 @@ if args.prepare_dataset:
         with open(join(dataset_path,"val_dataset.pkl"), "wb") as output_file:
             pickle.dump(val_dataset, output_file)
 
-    if len(test_data)>0:
+    if len(test_data) > 0:
         test_source_code,test_labels=prepare_dataset(test_data,tokenizer)
         filtered_test_source_code,filtered_test_labels=test_filter(test_source_code,test_labels)
         X_chunked_test_tokenized = tokenizer(filtered_test_source_code,padding=True, truncation=True, max_length=512)
-        test_dataset = Dataset(X_chunked_test_tokenized,filtered_test_labels) 
+        test_dataset = Dataset(X_chunked_test_tokenized,filtered_test_labels)
 
         with open(join(dataset_path,"test_dataset.pkl"), "wb") as output_file:
             pickle.dump(test_dataset, output_file)
 
-else:
+    return train_dataset, val_dataset, test_dataset
+
+
+def load_dataset_pickles(dataset_path):
+    train_dataset = None
+    val_dataset = None
+    test_dataset = None
+
     print("Loading Dataset...")
     train_dataset_path = Path(join(dataset_path,"train_dataset.pkl"))
     if train_dataset_path.exists():
@@ -522,81 +529,35 @@ else:
     if test_dataset_path.exists():
         with open(test_dataset_path, "rb") as output_file_test:
             test_dataset= pickle.load(output_file_test)
-    
 
-if args.train:
-    print("Training Dataset...")
-    model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=2)
-    loss_logger_callback = EpochTrainingLossLoggerCallback(args.output_dir)
-    train_args = TrainingArguments(
-        output_dir=args.output_dir,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
-        logging_strategy="epoch",
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        per_device_eval_batch_size=args.per_device_eval_batch_size,
-        num_train_epochs=args.num_train_epochs,
-        seed=121,
-        load_best_model_at_end=True,
-        fp16=use_fp16)
-
-    trainer = Trainer(
-        model=model,
-        args=train_args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        compute_metrics=compute_metrics,
-        callbacks=[loss_logger_callback, EarlyStoppingCallback(early_stopping_patience=3)])
-    trainer.train()
-    trainer.save_model(join(args.output_dir,"best_model"))
-    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    if train_dataset is not None:
-        export_last_hidden_state_vectors(
-            trainer.model,
-            train_dataset,
-            args.per_device_eval_batch_size,
-            build_hidden_state_output_path(args.output_dir, "train", export_timestamp),
-        )
+    return train_dataset, val_dataset, test_dataset
 
 
-if args.val_predict or args.test_predict:
-    eval_model_name = args.eval_model_name or join(args.output_dir,"best_model")
+def build_eval_model_and_trainer(eval_model_name, output_dir, eval_batch_size, use_fp16):
     best_model= RobertaForSequenceClassification.from_pretrained(eval_model_name, num_labels=2)
-    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=True)
+    train_args = TrainingArguments(
+        output_dir=output_dir,
+        per_device_eval_batch_size=eval_batch_size,
+        fp16=use_fp16,
+    )
     trainer = Trainer(model=best_model,args=train_args)
+    return best_model, trainer
 
 
-if args.val_predict:
-    print("Validation Results...")
-    export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    if val_dataset is not None:
-        export_last_hidden_state_vectors(
-            best_model,
-            val_dataset,
-            args.per_device_eval_batch_size,
-            build_hidden_state_output_path(args.output_dir, "val", export_timestamp),
-        )
-
-    raw_pred_val, b, c = trainer.predict(val_dataset)
-    y_pred_val = np.argmax(raw_pred_val, axis=1)
-    val_metrics=compute_metrics([raw_pred_val,val_dataset.labels])
-    print("Validation Metrics",val_metrics)
-
-
-if args.test_predict:
+def run_test_prediction(best_model, trainer, test_dataset, output_dir, eval_batch_size):
     print("Test Results...")
     export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     test_hidden_state_output_path = None
     if test_dataset is not None:
         test_hidden_state_output_path = build_hidden_state_output_path(
-            args.output_dir,
+            output_dir,
             "test",
             export_timestamp,
         )
         export_last_hidden_state_vectors(
             best_model,
             test_dataset,
-            args.per_device_eval_batch_size,
+            eval_batch_size,
             test_hidden_state_output_path,
         )
 
@@ -604,24 +565,207 @@ if args.test_predict:
     y_pred_test = np.argmax(raw_pred_test, axis=1)
     test_preds=compute_metrics([raw_pred_test,test_dataset.labels])
     print("Test Metrics",test_preds)
-    # 매핑 결과 저장
     df = pd.DataFrame({
         "label": test_dataset.labels,
         "pred": y_pred_test,
     })
-    df.to_csv(join(args.output_dir, "test_pred_with_code.csv"), index=False)
+    df.to_csv(join(output_dir, "test_pred_with_code.csv"), index=False)
 
     if test_hidden_state_output_path is not None:
         maybe_export_paired_test_tsne(test_hidden_state_output_path)
 
-    
-if args.train_predict:
-    print("Train Results...")
-    best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
-    train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=use_fp16)
-    trainer = Trainer(model=best_model,args=train_args)
+    return test_hidden_state_output_path
 
-    raw_pred_train, b, c = trainer.predict(train_dataset)
-    y_pred_train = np.argmax(raw_pred_train, axis=1)
-    train_preds=compute_metrics([raw_pred_train,train_dataset.labels])
-    print("Train Metrics",train_preds)
+
+def run_extended_realvul(args, project_df, use_fp16):
+    active_modes = [
+        args.prepare_dataset,
+        args.train,
+        args.val_predict,
+        args.test_predict,
+        args.train_predict,
+    ]
+    if any(active_modes):
+        raise ValueError("--extended-realvul does not accept other phase flags")
+
+    require_model_artifacts(args.model_name, "fine-tuned model")
+    require_model_artifacts(args.baseline_model_name, "baseline model")
+
+    test_data=project_df[project_df["dataset_type"]=="test"]
+    if len(test_data) == 0:
+        raise ValueError("Expected dataset_type=test rows for --extended-realvul")
+
+    print("Preparing Extended RealVul test dataset...")
+    tokenizer = RobertaTokenizer.from_pretrained(args.tokenizer_name)
+    prepare_dataset_pickles(
+        train_val=project_df.iloc[0:0],
+        test_data=test_data,
+        tokenizer=tokenizer,
+        dataset_path=args.dataset_path,
+        test_only=True,
+    )
+    _, _, test_dataset = load_dataset_pickles(args.dataset_path)
+    if test_dataset is None:
+        raise RuntimeError(f"Expected test_dataset.pkl under {args.dataset_path}")
+
+    print(f"Evaluating fine-tuned model from {args.model_name}...")
+    best_model, trainer = build_eval_model_and_trainer(
+        args.model_name,
+        args.output_dir,
+        args.per_device_eval_batch_size,
+        use_fp16,
+    )
+    run_test_prediction(
+        best_model,
+        trainer,
+        test_dataset,
+        args.output_dir,
+        args.per_device_eval_batch_size,
+    )
+
+    raw_output_dir = join(args.output_dir, RAW_MODEL_EVAL_DIRNAME)
+    Path(raw_output_dir).mkdir(parents=True, exist_ok=True)
+    print(f"Evaluating baseline model from {args.baseline_model_name}...")
+    raw_model, raw_trainer = build_eval_model_and_trainer(
+        args.baseline_model_name,
+        raw_output_dir,
+        args.per_device_eval_batch_size,
+        use_fp16,
+    )
+    run_test_prediction(
+        raw_model,
+        raw_trainer,
+        test_dataset,
+        raw_output_dir,
+        args.per_device_eval_batch_size,
+    )
+    print(f"Extended RealVul evaluation completed under {args.output_dir}")
+
+
+def main():
+    parser = build_arg_parser()
+    args = parser.parse_args()
+
+    print("Arguments", args)
+
+    tokenizer_name=args.tokenizer_name
+    model_name=args.model_name
+    dataset_csv_path=args.dataset_csv_path
+    output_dir=args.output_dir
+    dataset_path= args.dataset_path
+    use_fp16 = torch.cuda.is_available()
+    print(f"Using fp16: {use_fp16}")
+
+    if not exists(dataset_path):
+            os.makedirs(dataset_path)
+
+    if not exists(output_dir):
+            os.makedirs(output_dir)
+
+    project_df=pd.read_csv(dataset_csv_path)
+    project_df["vulnerable_line_numbers"]=project_df["vulnerable_line_numbers"].fillna("")
+    train_val=project_df[project_df["dataset_type"]=="train_val"]
+    test_data=project_df[project_df["dataset_type"]=="test"]
+
+    if args.extended_realvul:
+        run_extended_realvul(args, project_df, use_fp16)
+        return
+
+    train_dataset = None
+    val_dataset = None
+    test_dataset = None
+
+    if args.prepare_dataset:
+        print("Preparing Dataset...")
+        tokenizer = RobertaTokenizer.from_pretrained(tokenizer_name)
+        train_dataset, val_dataset, test_dataset = prepare_dataset_pickles(
+            train_val,
+            test_data,
+            tokenizer,
+            dataset_path,
+        )
+    else:
+        train_dataset, val_dataset, test_dataset = load_dataset_pickles(dataset_path)
+
+    if args.train:
+        print("Training Dataset...")
+        model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=2)
+        loss_logger_callback = EpochTrainingLossLoggerCallback(args.output_dir)
+        train_args = TrainingArguments(
+            output_dir=args.output_dir,
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            logging_strategy="epoch",
+            per_device_train_batch_size=args.per_device_train_batch_size,
+            per_device_eval_batch_size=args.per_device_eval_batch_size,
+            num_train_epochs=args.num_train_epochs,
+            seed=121,
+            load_best_model_at_end=True,
+            fp16=use_fp16)
+
+        trainer = Trainer(
+            model=model,
+            args=train_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[loss_logger_callback, EarlyStoppingCallback(early_stopping_patience=3)])
+        trainer.train()
+        trainer.save_model(join(args.output_dir,"best_model"))
+        export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        if train_dataset is not None:
+            export_last_hidden_state_vectors(
+                trainer.model,
+                train_dataset,
+                args.per_device_eval_batch_size,
+                build_hidden_state_output_path(args.output_dir, "train", export_timestamp),
+            )
+
+    if args.val_predict or args.test_predict:
+        eval_model_name = args.eval_model_name or join(args.output_dir,"best_model")
+        best_model, trainer = build_eval_model_and_trainer(
+            eval_model_name,
+            args.output_dir,
+            args.per_device_eval_batch_size,
+            use_fp16,
+        )
+
+    if args.val_predict:
+        print("Validation Results...")
+        export_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        if val_dataset is not None:
+            export_last_hidden_state_vectors(
+                best_model,
+                val_dataset,
+                args.per_device_eval_batch_size,
+                build_hidden_state_output_path(args.output_dir, "val", export_timestamp),
+            )
+
+        raw_pred_val, b, c = trainer.predict(val_dataset)
+        y_pred_val = np.argmax(raw_pred_val, axis=1)
+        val_metrics=compute_metrics([raw_pred_val,val_dataset.labels])
+        print("Validation Metrics",val_metrics)
+
+    if args.test_predict:
+        run_test_prediction(
+            best_model,
+            trainer,
+            test_dataset,
+            args.output_dir,
+            args.per_device_eval_batch_size,
+        )
+
+    if args.train_predict:
+        print("Train Results...")
+        best_model= RobertaForSequenceClassification.from_pretrained(join(args.output_dir,"best_model"), num_labels=2)
+        train_args = TrainingArguments(output_dir=args.output_dir,per_device_eval_batch_size=args.per_device_eval_batch_size,fp16=use_fp16)
+        trainer = Trainer(model=best_model,args=train_args)
+
+        raw_pred_train, b, c = trainer.predict(train_dataset)
+        y_pred_train = np.argmax(raw_pred_train, axis=1)
+        train_preds=compute_metrics([raw_pred_train,train_dataset.labels])
+        print("Train Metrics",train_preds)
+
+
+if __name__ == "__main__":
+    main()
